@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Backend API Server
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - FUJI_RPC_URL=https://api.avax-test.network/ext/bc/C/rpc
+      - CONTRACT_ADDRESS=0xa982db91EaF445C7928d30e37FfE4575125F8523
+      - JWT_SECRET=${JWT_SECRET:-avalanche-voting-jwt-secret-change-in-production}
+      - ADMIN_PRIVATE_KEY=${ADMIN_PRIVATE_KEY:-}
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - voting-network
+
+  # Frontend Web Server (Production Build)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - voting-network
+
+  # Optional: Redis for production nonce storage
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - voting-network
+    profiles:
+      - redis
+
+  # Optional: PostgreSQL for persistent storage
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=voting_db
+      - POSTGRES_USER=voting_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-voting_password_change_in_production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    networks:
+      - voting-network
+    profiles:
+      - database
+
+volumes:
+  redis_data:
+  postgres_data:
+
+networks:
+  voting-network:
+    driver: bridge
