@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
-import { Clock, Vote as VoteIcon, CheckCircle, Wallet } from 'lucide-react';
+import { Clock, Vote as VoteIcon, CheckCircle, Wallet, Shield, Zap, Globe, Activity } from 'lucide-react';
 import { ethers } from 'ethers';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../lib/contract';
 
@@ -294,104 +294,213 @@ const Vote = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/20">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
+    <div className="min-h-screen bg-gradient-to-br from-background via-background/50 to-primary/5 relative overflow-hidden">
+      {/* Blockchain-themed background elements */}
+      <div className="absolute inset-0 opacity-5">
+        <div className="absolute top-10 left-10 w-32 h-32 border border-primary/20 rounded-lg rotate-12"></div>
+        <div className="absolute bottom-20 right-20 w-24 h-24 border border-accent/20 rounded-lg -rotate-12"></div>
+        <div className="absolute top-1/2 left-1/4 w-16 h-16 border border-primary-glow/20 rounded-lg rotate-45"></div>
+      </div>
+      
+      <div className="container mx-auto px-4 py-8 relative z-10">
+        {/* Enhanced Header */}
         <div className="text-center mb-12">
-          <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
-            Avalanche Voting
-          </h1>
-          <p className="text-xl text-muted-foreground mb-8">
-            Decentralized, transparent, and secure blockchain voting
+          <div className="flex items-center justify-center gap-4 mb-6">
+            <div className="p-3 bg-gradient-to-br from-primary to-primary-glow rounded-xl">
+              <Shield className="w-8 h-8 text-primary-foreground" />
+            </div>
+            <h1 className="text-6xl font-bold bg-gradient-to-r from-primary via-primary-glow to-accent bg-clip-text text-transparent">
+              AvalancheVote
+            </h1>
+            <div className="p-3 bg-gradient-to-br from-accent to-primary rounded-xl">
+              <Zap className="w-8 h-8 text-primary-foreground" />
+            </div>
+          </div>
+          <p className="text-xl text-muted-foreground mb-4">
+            Decentralized • Transparent • Immutable
           </p>
+          <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-accent" />
+              <span>Avalanche C-Chain</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-success" />
+              <span>Real-time Results</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-primary" />
+              <span>Blockchain Verified</span>
+            </div>
+          </div>
           
-          {/* Election Status */}
-          <Card className="max-w-2xl mx-auto p-6 bg-card/50 backdrop-blur-sm border-primary/20">
-            <div className="flex items-center justify-center gap-4 mb-4">
-              <Clock className="w-6 h-6 text-primary" />
+          {/* Enhanced Election Status */}
+          <Card className="max-w-3xl mx-auto mt-8 p-8 bg-gradient-to-r from-card/80 to-card/60 backdrop-blur-md border-primary/20 shadow-elegant">
+            <div className="flex items-center justify-center gap-6 mb-6">
+              <Clock className="w-8 h-8 text-primary animate-pulse" />
               <div className="text-center">
                 {status?.electionActive ? (
                   <>
-                    <Badge className="bg-success text-success-foreground mb-2">Election Active</Badge>
-                    <p className="text-lg font-semibold text-foreground">{timeLeft}</p>
+                    <Badge className="bg-gradient-to-r from-success to-success/80 text-success-foreground mb-3 px-4 py-2 text-lg">
+                      🗳️ Election Active
+                    </Badge>
+                    <p className="text-2xl font-bold text-foreground bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                      {timeLeft}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-2">Time remaining to cast your vote</p>
                   </>
                 ) : (
-                  <Badge variant="destructive">Election Ended</Badge>
+                  <>
+                    <Badge variant="destructive" className="mb-3 px-4 py-2 text-lg">
+                      ⏰ Election Ended
+                    </Badge>
+                    <p className="text-lg text-muted-foreground">Results are being finalized</p>
+                  </>
                 )}
               </div>
             </div>
             {status?.electionActive && (
-              <Progress value={getProgress()} className="w-full" />
+              <div className="space-y-2">
+                <Progress value={getProgress()} className="w-full h-3 bg-muted" />
+                <p className="text-xs text-center text-muted-foreground">
+                  Election Progress • Contract: {CONTRACT_ADDRESS.slice(0, 6)}...{CONTRACT_ADDRESS.slice(-4)}
+                </p>
+              </div>
             )}
           </Card>
         </div>
 
-        {/* Wallet Connection */}
+        {/* Enhanced Wallet Connection */}
         {!connected ? (
-          <Card className="max-w-md mx-auto p-8 text-center">
-            <Wallet className="w-16 h-16 mx-auto mb-4 text-primary" />
-            <h3 className="text-2xl font-semibold mb-4">Connect Your Wallet</h3>
+          <Card className="max-w-md mx-auto p-8 text-center bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-md border-accent/20 shadow-elegant">
+            <div className="p-4 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+              <Wallet className="w-12 h-12 text-accent" />
+            </div>
+            <h3 className="text-2xl font-semibold mb-4 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              Connect Web3 Wallet
+            </h3>
             <p className="text-muted-foreground mb-6">
-              Connect your wallet to participate in the election
+              Secure blockchain authentication required for voting
             </p>
-            <Button onClick={connectWallet} size="lg" className="w-full">
+            <Button onClick={connectWallet} size="lg" className="w-full bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 transition-all duration-300">
+              <Wallet className="w-5 h-5 mr-2" />
               Connect Wallet
             </Button>
-          </Card>
-        ) : hasVoted ? (
-          <Card className="max-w-md mx-auto p-8 text-center bg-success/10 border-success/20">
-            <CheckCircle className="w-16 h-16 mx-auto mb-4 text-success" />
-            <h3 className="text-2xl font-semibold mb-4 text-success">Vote Recorded!</h3>
-            <p className="text-muted-foreground">
-              Thank you for participating in the election. Your vote has been securely recorded on the blockchain.
+            <p className="text-xs text-muted-foreground mt-4">
+              Supports MetaMask, Core Wallet, and other Web3 wallets
             </p>
           </Card>
+        ) : hasVoted ? (
+          <Card className="max-w-md mx-auto p-8 text-center bg-gradient-to-br from-success/10 to-success/5 border-success/30 backdrop-blur-md shadow-glow">
+            <div className="p-4 bg-gradient-to-br from-success/20 to-success/30 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+              <CheckCircle className="w-12 h-12 text-success" />
+            </div>
+            <h3 className="text-2xl font-semibold mb-4 text-success">Vote Recorded!</h3>
+            <p className="text-muted-foreground mb-4">
+              Your vote has been permanently recorded on the Avalanche blockchain
+            </p>
+            <div className="p-4 bg-muted/50 rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                Transaction Hash: <br />
+                <span className="font-mono text-xs">{userAddress.slice(0, 20)}...</span>
+              </p>
+            </div>
+          </Card>
         ) : status?.electionActive ? (
-          <div className="max-w-4xl mx-auto">
-            {/* Voter Name Input */}
-            <Card className="p-6 mb-8">
-              <h3 className="text-xl font-semibold mb-4">Enter Your Information</h3>
-              <Input
-                placeholder="Enter your full name"
-                value={voterName}
-                onChange={(e) => setVoterName(e.target.value)}
-                className="max-w-md"
-              />
+          <div className="max-w-5xl mx-auto">
+            {/* Enhanced Voter Input */}
+            <Card className="p-8 mb-8 bg-gradient-to-r from-card/90 to-card/70 backdrop-blur-md border-primary/20 shadow-elegant">
+              <h3 className="text-2xl font-semibold mb-6 flex items-center gap-3">
+                <div className="p-2 bg-gradient-to-br from-primary/20 to-accent/20 rounded-lg">
+                  <VoteIcon className="w-6 h-6 text-primary" />
+                </div>
+                Voter Information
+              </h3>
+              <div className="flex flex-col md:flex-row gap-4 items-end">
+                <div className="flex-1">
+                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
+                    Full Name (Recorded on blockchain)
+                  </label>
+                  <Input
+                    placeholder="Enter your full name"
+                    value={voterName}
+                    onChange={(e) => setVoterName(e.target.value)}
+                    className="h-12 bg-background/50 border-primary/20 focus:border-primary"
+                  />
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  <p>Wallet: {userAddress.slice(0, 6)}...{userAddress.slice(-4)}</p>
+                </div>
+              </div>
             </Card>
 
-            {/* Candidates */}
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Enhanced Candidates Grid */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
               {candidates.map((candidate) => (
-                <Card key={candidate.index} className="p-6 hover:shadow-elegant transition-all duration-300 bg-card/50 backdrop-blur-sm">
+                <Card key={candidate.index} className="group p-8 hover:shadow-glow transition-all duration-500 bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-md border-primary/20 hover:border-accent/40 hover:scale-105">
                   <div className="text-center">
-                    <div className="w-24 h-24 bg-gradient-to-br from-primary to-primary-glow rounded-full mx-auto mb-4 flex items-center justify-center">
-                      <span className="text-2xl font-bold text-primary-foreground">
-                        {candidate.name.split(' ').map(n => n[0]).join('')}
-                      </span>
+                    <div className="relative mb-6">
+                      <div className="w-32 h-32 bg-gradient-to-br from-primary via-primary-glow to-accent rounded-full mx-auto flex items-center justify-center shadow-elegant group-hover:shadow-glow transition-all duration-500">
+                        <span className="text-4xl font-bold text-primary-foreground">
+                          {candidate.name.split(' ').map(n => n[0]).join('')}
+                        </span>
+                      </div>
+                      <div className="absolute -bottom-2 -right-2 p-2 bg-accent rounded-full border-4 border-background">
+                        <Shield className="w-4 h-4 text-accent-foreground" />
+                      </div>
                     </div>
-                    <h3 className="text-xl font-semibold mb-4">{candidate.name}</h3>
+                    <h3 className="text-2xl font-semibold mb-6 bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
+                      {candidate.name}
+                    </h3>
                     <Button
                       onClick={() => handleVote(candidate.index)}
                       disabled={voting}
-                      className="w-full"
+                      className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 transition-all duration-300 shadow-lg hover:shadow-glow"
                       size="lg"
                     >
-                      <VoteIcon className="w-4 h-4 mr-2" />
-                      {voting ? 'Voting...' : 'Vote'}
+                      <VoteIcon className="w-5 h-5 mr-3" />
+                      {voting ? 'Processing Vote...' : 'Cast Vote'}
                     </Button>
+                    <p className="text-xs text-muted-foreground mt-3">
+                      Candidate #{candidate.index + 1}
+                    </p>
                   </div>
                 </Card>
               ))}
             </div>
           </div>
         ) : (
-          <Card className="max-w-md mx-auto p-8 text-center">
-            <h3 className="text-2xl font-semibold mb-4">Election Ended</h3>
-            <p className="text-muted-foreground">
-              The voting period has concluded. Results will be available shortly.
+          <Card className="max-w-md mx-auto p-8 text-center bg-gradient-to-br from-muted/50 to-muted/30 backdrop-blur-md">
+            <div className="p-4 bg-muted rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+              <Clock className="w-12 h-12 text-muted-foreground" />
+            </div>
+            <h3 className="text-2xl font-semibold mb-4">Election Concluded</h3>
+            <p className="text-muted-foreground mb-6">
+              The voting period has ended. Results are being finalized on the blockchain.
             </p>
+            <Button variant="outline" className="w-full" onClick={() => window.location.href = '/admin'}>
+              View Results
+            </Button>
           </Card>
         )}
+
+        {/* Blockchain Info Footer */}
+        <div className="mt-16 text-center">
+          <div className="flex items-center justify-center gap-8 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
+              <span>Live on Avalanche</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-primary rounded-full"></div>
+              <span>Fuji Testnet</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-accent rounded-full"></div>
+              <span>Powered by Web3</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
