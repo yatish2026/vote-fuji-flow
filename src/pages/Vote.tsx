@@ -64,7 +64,21 @@ const Vote = () => {
 
   const fetchCandidates = async () => {
     try {
+      console.log('Fetching candidates...');
       const response = await fetch('/api/candidates');
+      console.log('Candidates response:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Backend not responding - fetching candidates from contract');
+        await fetchCandidatesFromContract();
+        return;
+      }
+      
       const data = await response.json();
       const candidatesWithIndex = data.candidates.map((name: string, index: number) => ({
         name,
@@ -73,9 +87,33 @@ const Vote = () => {
       setCandidates(candidatesWithIndex);
     } catch (error) {
       console.error('Error fetching candidates:', error);
+      await fetchCandidatesFromContract();
+    }
+  };
+
+  const fetchCandidatesFromContract = async () => {
+    try {
+      console.log('Fetching candidates directly from contract...');
+      // @ts-ignore
+      if (window.ethereum) {
+        // @ts-ignore
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+        
+        const candidateNames = await contract.getCandidates();
+        const candidatesWithIndex = candidateNames.map((name: string, index: number) => ({
+          name,
+          index
+        }));
+        
+        console.log('Contract candidates:', candidatesWithIndex);
+        setCandidates(candidatesWithIndex);
+      }
+    } catch (error) {
+      console.error('Error fetching candidates from contract:', error);
       toast({
         title: "Error",
-        description: "Failed to fetch candidates",
+        description: "Failed to fetch candidates from contract",
         variant: "destructive"
       });
     }
@@ -83,11 +121,63 @@ const Vote = () => {
 
   const fetchElectionStatus = async () => {
     try {
+      console.log('Fetching election status...');
       const response = await fetch('/api/status');
+      console.log('Status response:', response.status, response.headers.get('content-type'));
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Backend not responding with JSON - likely not running');
+        // Fallback: try to get status directly from contract
+        await fetchStatusFromContract();
+        return;
+      }
+      
       const data = await response.json();
+      console.log('Status data:', data);
       setStatus(data);
     } catch (error) {
       console.error('Error fetching status:', error);
+      // Fallback: try to get status directly from contract
+      await fetchStatusFromContract();
+    }
+  };
+
+  const fetchStatusFromContract = async () => {
+    try {
+      console.log('Fetching status directly from contract...');
+      // @ts-ignore
+      if (window.ethereum) {
+        // @ts-ignore
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+        
+        const [isActive, timeLeft, endTime] = await Promise.all([
+          contract.isElectionActive(),
+          contract.timeLeft(),
+          contract.electionEndTime()
+        ]);
+        
+        const statusData = {
+          electionActive: isActive,
+          timeLeftSeconds: Number(timeLeft),
+          electionEndTime: Number(endTime)
+        };
+        
+        console.log('Contract status:', statusData);
+        setStatus(statusData);
+      }
+    } catch (error) {
+      console.error('Error fetching from contract:', error);
+      toast({
+        title: "Connection Error",
+        description: "Unable to connect to the election contract. Please check your wallet connection.",
+        variant: "destructive"
+      });
     }
   };
 
