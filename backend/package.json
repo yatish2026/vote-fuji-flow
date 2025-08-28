@@ -25,19 +25,21 @@
   "author": "Avalanche Voting Team",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
     "cors": "^2.8.5",
+    "crypto": "^1.0.1",
     "dotenv": "^16.3.1",
     "ethers": "^6.13.0",
+    "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
-    "crypto": "^1.0.1",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "react-i18next": "^15.7.2"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1",
+    "@types/react-i18next": "^8.1.0",
+    "eslint": "^8.57.0",
     "jest": "^29.7.0",
-    "supertest": "^6.3.3",
-    "eslint": "^8.57.0"
+    "nodemon": "^3.0.1",
+    "supertest": "^6.3.3"
   },
   "engines": {
     "node": ">=18.0.0",
