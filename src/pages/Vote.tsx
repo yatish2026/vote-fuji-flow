@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
+import { LanguageSelector } from '@/components/LanguageSelector';
+import { VoiceControls } from '@/components/VoiceControls';
+import { useSpeech } from '@/hooks/useSpeech';
 import { Clock, Vote as VoteIcon, CheckCircle, Wallet, Shield, Zap, Globe, Activity } from 'lucide-react';
 import { ethers } from 'ethers';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../lib/contract';
@@ -21,6 +25,8 @@ interface ElectionStatus {
 }
 
 const Vote = () => {
+  const { t } = useTranslation();
+  const { speak } = useSpeech();
   console.log('Vote component rendering...');
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [status, setStatus] = useState<ElectionStatus | null>(null);
@@ -243,11 +249,33 @@ const Vote = () => {
     }
   };
 
+  const handleVoiceCommand = (command: string) => {
+    console.log('Voice command received:', command);
+    
+    if (command.startsWith('VOTE:')) {
+      const candidateName = command.replace('VOTE:', '').trim().toLowerCase();
+      const candidate = candidates.find(c => 
+        c.name.toLowerCase().includes(candidateName) || 
+        candidateName.includes(c.name.toLowerCase())
+      );
+      
+      if (candidate) {
+        handleVote(candidate.index);
+      } else {
+        speak(t('voting.candidateNotFound', { name: candidateName }));
+      }
+    } else if (command === 'SHOW_RESULTS') {
+      window.location.href = '/admin';
+    } else if (command === 'CONNECT_WALLET') {
+      connectWallet();
+    }
+  };
+
   const handleVote = async (candidateIndex: number) => {
     if (!voterName.trim()) {
       toast({
-        title: "Name Required",
-        description: "Please enter your name to vote",
+        title: t('voting.enterName'),
+        description: t('voting.enterName'),
         variant: "destructive"
       });
       return;
@@ -305,20 +333,26 @@ const Vote = () => {
       
       <div className="container mx-auto px-4 py-8 relative z-10">
         {/* Enhanced Header */}
+        {/* Language and Voice Controls Header */}
+        <div className="flex justify-between items-center mb-8">
+          <LanguageSelector />
+          <VoiceControls onVoiceCommand={handleVoiceCommand} compact={true} />
+        </div>
+
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-4 mb-6">
             <div className="p-3 bg-gradient-to-br from-primary to-primary-glow rounded-xl">
               <Shield className="w-8 h-8 text-primary-foreground" />
             </div>
             <h1 className="text-6xl font-bold bg-gradient-to-r from-primary via-primary-glow to-accent bg-clip-text text-transparent">
-              AvalancheVote
+              {t('voting.title')}
             </h1>
             <div className="p-3 bg-gradient-to-br from-accent to-primary rounded-xl">
               <Zap className="w-8 h-8 text-primary-foreground" />
             </div>
           </div>
           <p className="text-xl text-muted-foreground mb-4">
-            Decentralized • Transparent • Immutable
+            {t('voting.subtitle')}
           </p>
           <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
