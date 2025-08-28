@@ -1,6 +1,6 @@
 const { ethers } = require('ethers');
 
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || "0x367Ecb4846fCAbE436Ed5A855DfD1377C5e5f03f";
+const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || "0x1549f7Ddd4fCE6109F448A1C6dFDF0694d3a5fbd";
 const FUJI_RPC_URL = process.env.FUJI_RPC_URL || "https://api.avax-test.network/ext/bc/C/rpc";
 
 const CONTRACT_ABI = [
