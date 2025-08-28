@@ -34,8 +34,8 @@ export const useSpeech = (): UseSpeechReturn => {
   };
 
   // Check if speech APIs are supported
-  const isSupported = typeof window !== 'undefined' && 
-    'speechSynthesis' in window && 
+  const isSupported = typeof window !== 'undefined' &&
+    'speechSynthesis' in window &&
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
   // Text-to-Speech function
@@ -44,7 +44,7 @@ export const useSpeech = (): UseSpeechReturn => {
 
     // Stop any current speech
     window.speechSynthesis.cancel();
-    
+
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = getLanguageCode(i18n.language);
     utterance.rate = 0.9;
@@ -93,7 +93,7 @@ export const useSpeech = (): UseSpeechReturn => {
     // @ts-ignore
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
-    
+
     recognition.lang = getLanguageCode(i18n.language);
     recognition.continuous = false;
     recognition.interimResults = false;

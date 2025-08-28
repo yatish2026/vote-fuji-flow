@@ -4,12 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
+import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line
 } from 'recharts';
-import { 
-  Shield, Users, TrendingUp, Download, RefreshCw, 
+import {
+  Shield, Users, TrendingUp, Download, RefreshCw,
   Clock, CheckCircle, AlertCircle, Wallet, Brain, Zap,
   Activity, Globe, Database, Lock, BarChart3
 } from 'lucide-react';
@@ -31,9 +31,9 @@ interface AnalyticsData {
     percentage: number;
   };
   demographics?: {
-    ageGroups: Array<{ageGroup: string; count: number}>;
-    genderRatio: Array<{gender: string; count: number}>;
-    locations: Array<{location: string; count: number}>;
+    ageGroups: Array<{ ageGroup: string; count: number }>;
+    genderRatio: Array<{ gender: string; count: number }>;
+    locations: Array<{ location: string; count: number }>;
   };
   insights?: string[];
 }
@@ -86,7 +86,7 @@ const Admin = () => {
   const connectWalletAndAuth = async () => {
     try {
       setIsAuthenticating(true);
-      
+
       // @ts-ignore
       if (!window.ethereum) {
         throw new Error('MetaMask not found');
@@ -103,9 +103,9 @@ const Admin = () => {
       // Check if user is admin
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
       const adminAddress = await contract.admin();
-      
+
       if (address.toLowerCase() !== adminAddress.toLowerCase()) {
-        throw new Error('Access denied: You are not the admin of this contract');
+        throw new Error('Access denied: You are  not the admin of this contract');
       }
 
       // Save auth data
@@ -113,9 +113,9 @@ const Admin = () => {
         address,
         timestamp: Date.now()
       }));
-      
+
       setIsAuthenticated(true);
-      
+
       toast({
         title: "Authentication Successful",
         description: "Welcome to the admin dashboard",
@@ -136,21 +136,21 @@ const Admin = () => {
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
-      
+
       // Try backend first
       const token = localStorage.getItem('adminToken');
       if (token) {
         const response = await fetch('/api/analytics', {
           headers: { Authorization: `Bearer ${token}` }
         });
-        
+
         if (response.ok) {
           const data = await response.json();
           setAnalytics(data);
           return;
         }
       }
-      
+
       // Fallback: get data directly from contract
       await fetchAnalyticsFromContract();
     } catch (error) {
@@ -166,17 +166,17 @@ const Admin = () => {
       console.log('Fetching analytics from contract...');
       // @ts-ignore
       if (!window.ethereum) return;
-      
+
       // @ts-ignore
       const provider = new ethers.BrowserProvider(window.ethereum);
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-      
+
       const [candidates, totalVotes, winner] = await Promise.all([
         contract.getCandidates(),
         contract.totalVotes(),
         contract.getWinner().catch(() => ({ winnerName: '', winnerVotes: 0 }))
       ]);
-      
+
       // Get vote data for each candidate
       const votes: VoteData[] = [];
       for (let i = 0; i < candidates.length; i++) {
@@ -188,10 +188,10 @@ const Admin = () => {
           percentage: Math.round(percentage * 100) / 100
         });
       }
-      
+
       // Generate AI insights
       const insights = generateAIInsights(votes, Number(totalVotes));
-      
+
       const analyticsData: AnalyticsData = {
         totalVotes: Number(totalVotes),
         votes,
@@ -203,7 +203,7 @@ const Admin = () => {
         demographics: generateDemographics(Number(totalVotes)),
         insights
       };
-      
+
       setAnalytics(analyticsData);
     } catch (error) {
       console.error('Error fetching from contract:', error);
@@ -217,33 +217,33 @@ const Admin = () => {
 
   const generateAIInsights = (votes: VoteData[], totalVotes: number) => {
     if (votes.length === 0) return [];
-    
+
     const sortedVotes = [...votes].sort((a, b) => b.votes - a.votes);
     const leader = sortedVotes[0];
     const runner = sortedVotes[1];
-    
+
     const insights = [
       `${leader.candidate} is leading with ${leader.votes} votes (${leader.percentage}% of total votes)`,
       `Total voter turnout: ${totalVotes} participants in this blockchain election`,
       `Vote distribution shows ${leader.percentage > 50 ? 'a clear majority' : 'a competitive race'} among candidates`
     ];
-    
+
     if (runner && leader.votes > runner.votes) {
       const margin = leader.votes - runner.votes;
       insights.push(`${leader.candidate} leads ${runner.candidate} by ${margin} votes (${(leader.percentage - runner.percentage).toFixed(1)}% margin)`);
     }
-    
+
     if (totalVotes > 100) {
       insights.push(`High engagement detected: ${totalVotes} voters participated in this decentralized election`);
     }
-    
+
     return insights;
   };
 
   const generateDemographics = (totalVotes: number) => {
     // Generate realistic demo data based on vote count
     const baseCount = Math.max(1, Math.floor(totalVotes / 4));
-    
+
     return {
       ageGroups: [
         { ageGroup: '18-25', count: Math.floor(baseCount * 1.2) },
@@ -270,17 +270,17 @@ const Admin = () => {
     try {
       // @ts-ignore
       if (!window.ethereum) return;
-      
+
       // @ts-ignore
       const provider = new ethers.BrowserProvider(window.ethereum);
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-      
+
       const [isActive, timeLeft, endTime] = await Promise.all([
         contract.isElectionActive(),
         contract.timeLeft(),
         contract.electionEndTime()
       ]);
-      
+
       setElectionStatus({
         electionActive: isActive,
         timeLeftSeconds: Number(timeLeft),
@@ -294,13 +294,13 @@ const Admin = () => {
   const exportResults = async () => {
     try {
       if (!analytics) return;
-      
+
       // Generate CSV data
       const csvData = [
         ['Candidate', 'Votes', 'Percentage'],
         ...analytics.votes.map(vote => [vote.candidate, vote.votes.toString(), vote.percentage.toString()])
       ];
-      
+
       const csvContent = csvData.map(row => row.join(',')).join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
@@ -311,7 +311,7 @@ const Admin = () => {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
+
       toast({
         title: "Export Successful",
         description: "Results downloaded as CSV",
@@ -332,22 +332,22 @@ const Admin = () => {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-      
+
       const tx = await contract.endElection();
       toast({
         title: "Transaction Submitted",
         description: "Ending election...",
         variant: "default"
       });
-      
+
       await tx.wait();
-      
+
       toast({
         title: "Election Ended",
         description: "The election has been officially ended",
         variant: "default"
       });
-      
+
       fetchElectionStatus();
     } catch (error: any) {
       toast({
@@ -367,7 +367,7 @@ const Admin = () => {
           <div className="absolute bottom-40 right-32 w-32 h-32 border-2 border-accent/30 rounded-lg -rotate-12"></div>
           <div className="absolute top-1/3 right-1/4 w-24 h-24 border-2 border-primary-glow/30 rounded-lg rotate-45"></div>
         </div>
-        
+
         <Card className="max-w-md w-full mx-4 p-10 text-center bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-xl border-primary/30 shadow-elegant">
           <div className="p-4 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full w-24 h-24 mx-auto mb-8 flex items-center justify-center">
             <Shield className="w-12 h-12 text-primary" />
@@ -415,7 +415,7 @@ const Admin = () => {
         <div className="absolute top-1/2 left-1/4 w-16 h-16 border border-primary-glow/20 rounded-lg rotate-45"></div>
         <div className="absolute top-1/4 right-1/3 w-20 h-20 border border-success/20 rounded-lg -rotate-45"></div>
       </div>
-      
+
       <div className="container mx-auto px-4 py-8 relative z-10">
         {/* Enhanced Header */}
         <div className="flex justify-between items-center mb-12">
@@ -473,7 +473,7 @@ const Admin = () => {
               </div>
             </div>
           </Card>
-          
+
           <Card className="p-6 bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-md border-primary/20 shadow-elegant">
             <div className="flex items-center justify-between">
               <div>
@@ -483,14 +483,14 @@ const Admin = () => {
                 </Badge>
               </div>
               <div className={`p-3 rounded-xl ${electionStatus?.electionActive ? 'bg-gradient-to-br from-success/20 to-success/10' : 'bg-gradient-to-br from-destructive/20 to-destructive/10'}`}>
-                {electionStatus?.electionActive ? 
-                  <Clock className="w-8 h-8 text-success" /> : 
+                {electionStatus?.electionActive ?
+                  <Clock className="w-8 h-8 text-success" /> :
                   <CheckCircle className="w-8 h-8 text-destructive" />
                 }
               </div>
             </div>
           </Card>
-          
+
           <Card className="p-6 bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-md border-primary/20 shadow-elegant">
             <div className="flex items-center justify-between">
               <div>
@@ -502,7 +502,7 @@ const Admin = () => {
               </div>
             </div>
           </Card>
-          
+
           <Card className="p-6 bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-md border-primary/20 shadow-elegant">
             <div className="flex items-center justify-between">
               <div>
@@ -545,12 +545,12 @@ const Admin = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
                     <XAxis dataKey="candidate" stroke="hsl(var(--muted-foreground))" />
                     <YAxis stroke="hsl(var(--muted-foreground))" />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'hsl(var(--card))', 
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
                         border: '1px solid hsl(var(--primary))',
                         borderRadius: '8px'
-                      }} 
+                      }}
                     />
                     <Bar dataKey="votes" fill="url(#gradient)" radius={[4, 4, 0, 0]} />
                     <defs>
@@ -584,12 +584,12 @@ const Admin = () => {
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'hsl(var(--card))', 
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
                         border: '1px solid hsl(var(--primary))',
                         borderRadius: '8px'
-                      }} 
+                      }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -644,12 +644,12 @@ const Admin = () => {
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" />
                     <XAxis dataKey="ageGroup" stroke="hsl(var(--muted-foreground))" />
                     <YAxis stroke="hsl(var(--muted-foreground))" />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'hsl(var(--card))', 
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
                         border: '1px solid hsl(var(--warning))',
                         borderRadius: '8px'
-                      }} 
+                      }}
                     />
                     <Bar dataKey="count" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} />
                   </BarChart>
@@ -677,12 +677,12 @@ const Admin = () => {
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'hsl(var(--card))', 
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: 'hsl(var(--card))',
                         border: '1px solid hsl(var(--success))',
                         borderRadius: '8px'
-                      }} 
+                      }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -734,7 +734,7 @@ const Admin = () => {
                   <p className="text-muted-foreground">Real-time analysis of voting patterns and trends</p>
                 </div>
               </div>
-              
+
               <div className="grid gap-6">
                 {analytics?.insights?.map((insight, index) => (
                   <div key={index} className="p-6 bg-gradient-to-r from-muted/50 to-muted/30 rounded-lg border border-primary/10">
@@ -746,11 +746,11 @@ const Admin = () => {
                     </div>
                   </div>
                 )) || (
-                  <div className="text-center py-12">
-                    <Brain className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-                    <p className="text-lg text-muted-foreground">Generating AI insights...</p>
-                  </div>
-                )}
+                    <div className="text-center py-12">
+                      <Brain className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+                      <p className="text-lg text-muted-foreground">Generating AI insights...</p>
+                    </div>
+                  )}
               </div>
             </Card>
 

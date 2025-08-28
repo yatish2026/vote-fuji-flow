@@ -36,44 +36,6 @@ A decentralized, transparent, and secure blockchain voting platform built on Ava
 - MetaMask or Core Wallet browser extension
 - Access to Avalanche Fuji Testnet
 
-### 1. Clone and Install
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd avalanche-voting-platform
-
-# Install frontend dependencies
-npm install
-
-# Install backend dependencies
-cd backend
-npm install
-```
-
-### 2. Environment Setup
-
-```bash
-# Backend configuration
-cd backend
-cp .env.example .env
-
-# Edit .env with your configuration:
-# - Set JWT_SECRET to a strong random string
-# - Optionally set ADMIN_PRIVATE_KEY for development
-```
-
-### 3. Start Development Servers
-
-```bash
-# Terminal 1: Start backend server
-cd backend
-npm run dev
-
-# Terminal 2: Start frontend development server
-cd ../
-npm run dev
-```
 
 ### 4. Access the Application
 
