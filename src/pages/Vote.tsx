@@ -21,6 +21,7 @@ interface ElectionStatus {
 }
 
 const Vote = () => {
+  console.log('Vote component rendering...');
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [status, setStatus] = useState<ElectionStatus | null>(null);
   const [voterName, setVoterName] = useState('');
