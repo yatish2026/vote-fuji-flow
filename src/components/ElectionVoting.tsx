@@ -14,6 +14,7 @@ import { FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI } from '@/lib/contract';
 import { useTranslation } from 'react-i18next';
 import { LanguageSelector } from './LanguageSelector';
 import { VoiceControls } from './VoiceControls';
+import EmailService, { sendElectionResults } from './EmailService';
 
 interface Candidate {
   id: number;
@@ -45,11 +46,13 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
   const [isConnected, setIsConnected] = useState(false);
   const [userAddress, setUserAddress] = useState('');
   const [voterName, setVoterName] = useState('');
+  const [voterEmail, setVoterEmail] = useState('');
   const [isVoting, setIsVoting] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [winner, setWinner] = useState<{ name: string; votes: number } | null>(null);
+  const [emailCollected, setEmailCollected] = useState(false);
 
   useEffect(() => {
     fetchElectionData();
@@ -119,9 +122,10 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
       const candidatesList: Candidate[] = [];
       for (let i = 0; i < Number(candidatesCount); i++) {
         const [candidateId, candidateName, candidateVotes] = await contract.getCandidate(electionId, i);
+        console.log(`Candidate ${i}:`, candidateName, 'Votes:', candidateVotes);
         candidatesList.push({
           id: Number(candidateId),
-          name: candidateName,
+          name: candidateName, // This should preserve the full candidate name
           votes: Number(candidateVotes)
         });
       }
@@ -132,7 +136,23 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
       if (!active) {
         try {
           const [winnerName, winnerVotes] = await contract.getWinner(electionId);
-          setWinner({ name: winnerName, votes: Number(winnerVotes) });
+          const winnerData = { name: winnerName, votes: Number(winnerVotes) };
+          setWinner(winnerData);
+          
+          // Send email results if user provided email
+          if (voterEmail && voterName) {
+            try {
+              await sendElectionResults(
+                voterEmail, 
+                voterName, 
+                electionData.title, 
+                winnerData, 
+                candidatesList
+              );
+            } catch (emailError) {
+              console.log('Email sending failed:', emailError);
+            }
+          }
         } catch (error) {
           console.log('No winner yet or error fetching winner');
         }
@@ -182,10 +202,10 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
   };
 
   const vote = async (candidateId: number) => {
-    if (!voterName.trim()) {
+    if (!voterName.trim() || !emailCollected) {
       toast({
         title: t('common.error'),
-        description: t('voting.enterName'),
+        description: t('voting.enterDetails'),
         variant: 'destructive'
       });
       return;
@@ -236,6 +256,12 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
     } finally {
       setIsVoting(false);
     }
+  };
+
+  const handleEmailCollected = (email: string, name: string) => {
+    setVoterEmail(email);
+    setVoterName(name);
+    setEmailCollected(true);
   };
 
   const formatTimeLeft = (seconds: number) => {
@@ -364,83 +390,97 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
 
         {/* Voting Section */}
         {electionStarted && !electionEnded && !hasVoted && (
-          <Card className="p-8 mb-8">
-            <h2 className="text-2xl font-bold mb-6 text-center">{t('voting.vote')}</h2>
-            
+          <div className="space-y-6 mb-8">
             {!isConnected ? (
-              <div className="text-center">
-                <Button onClick={connectWallet} size="lg" className="bg-gradient-to-r from-primary to-accent">
-                  <Wallet className="w-5 h-5 mr-2" />
-                  {t('voting.connectWallet')}
-                </Button>
-              </div>
+              <Card className="p-8">
+                <h2 className="text-2xl font-bold mb-6 text-center">{t('voting.vote')}</h2>
+                <div className="text-center">
+                  <Button onClick={connectWallet} size="lg" className="bg-gradient-to-r from-primary to-accent">
+                    <Wallet className="w-5 h-5 mr-2" />
+                    {t('voting.connectWallet')}
+                  </Button>
+                </div>
+              </Card>
             ) : (
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium mb-2">{t('voting.voterName')}</label>
-                  <Input
-                    value={voterName}
-                    onChange={(e) => setVoterName(e.target.value)}
-                    placeholder={t('voting.voterNamePlaceholder')}
-                    className="max-w-md"
+              <>
+                {!emailCollected ? (
+                  <EmailService
+                    electionTitle={election.title}
+                    onEmailCollected={handleEmailCollected}
                   />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {candidates.map((candidate) => (
-                    <Card key={candidate.id} className="p-6">
-                      <h3 className="text-xl font-semibold mb-4">{candidate.name}</h3>
-                      <Button
-                        onClick={() => vote(candidate.id)}
-                        disabled={isVoting}
-                        className="w-full"
-                      >
-                        <VoteIcon className="w-4 h-4 mr-2" />
-                        {isVoting ? t('voting.voting') : t('voting.vote')}
-                      </Button>
-                    </Card>
-                  ))}
-                </div>
+                ) : (
+                  <Card className="p-8">
+                    <h2 className="text-2xl font-bold mb-6 text-center">{t('voting.vote')}</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {candidates.map((candidate) => (
+                        <Card key={candidate.id} className="p-6">
+                          <h3 className="text-xl font-semibold mb-4">{candidate.name}</h3>
+                          <Button
+                            onClick={() => vote(candidate.id)}
+                            disabled={isVoting}
+                            className="w-full"
+                          >
+                            <VoteIcon className="w-4 h-4 mr-2" />
+                            {isVoting ? t('voting.voting') : t('voting.vote')}
+                          </Button>
+                        </Card>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Results Section - Only show after election ends */}
+        {electionEnded && (
+          <Card className="p-8">
+            <h2 className="text-2xl font-bold mb-6 text-center">{t('voting.results')}</h2>
+            
+            {candidates.length === 0 ? (
+              <p className="text-center text-muted-foreground">{t('voting.noVotes')}</p>
+            ) : (
+              <div className="space-y-4">
+                {candidates
+                  .sort((a, b) => b.votes - a.votes)
+                  .map((candidate, index) => {
+                    const percentage = election.totalVotes > 0 ? (candidate.votes / election.totalVotes) * 100 : 0;
+                    return (
+                      <div key={candidate.id} className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">{candidate.name}</span>
+                            {index === 0 && election.totalVotes > 0 && (
+                              <Badge variant="default">
+                                <Trophy className="w-3 h-3 mr-1" />
+                                {t('voting.winner')}
+                              </Badge>
+                            )}
+                          </div>
+                          <span className="text-sm text-muted-foreground">
+                            {candidate.votes} {t('voting.candidateVotes')} ({percentage.toFixed(1)}%)
+                          </span>
+                        </div>
+                        <Progress value={percentage} className="h-3" />
+                      </div>
+                    );
+                  })}
               </div>
             )}
           </Card>
         )}
 
-        {/* Results Section */}
-        <Card className="p-8">
-          <h2 className="text-2xl font-bold mb-6 text-center">{t('voting.results')}</h2>
-          
-          {candidates.length === 0 ? (
-            <p className="text-center text-muted-foreground">{t('voting.noVotes')}</p>
-          ) : (
-            <div className="space-y-4">
-              {candidates
-                .sort((a, b) => b.votes - a.votes)
-                .map((candidate, index) => {
-                  const percentage = election.totalVotes > 0 ? (candidate.votes / election.totalVotes) * 100 : 0;
-                  return (
-                    <div key={candidate.id} className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold">{candidate.name}</span>
-                          {index === 0 && electionEnded && election.totalVotes > 0 && (
-                            <Badge variant="default">
-                              <Trophy className="w-3 h-3 mr-1" />
-                              {t('voting.winner')}
-                            </Badge>
-                          )}
-                        </div>
-                        <span className="text-sm text-muted-foreground">
-                          {candidate.votes} {t('voting.candidateVotes')} ({percentage.toFixed(1)}%)
-                        </span>
-                      </div>
-                      <Progress value={percentage} className="h-3" />
-                    </div>
-                  );
-                })}
-            </div>
-          )}
-        </Card>
+        {/* Show message when election is active but results are hidden */}
+        {electionStarted && !electionEnded && (
+          <Card className="p-8 text-center">
+            <Clock className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-xl font-semibold mb-2">{t('voting.resultsHidden')}</h3>
+            <p className="text-muted-foreground">
+              {t('voting.resultsAvailableAfter')} {formatDate(election.endTime)}
+            </p>
+          </Card>
+        )}
       </div>
     </div>
   );

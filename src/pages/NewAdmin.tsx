@@ -17,7 +17,9 @@ import { ethers } from 'ethers';
 import { FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI } from '@/lib/contract';
 import { useTranslation } from 'react-i18next';
 import { LanguageSelector } from '@/components/LanguageSelector';
+import { VoiceControls } from '@/components/VoiceControls';
 import ElectionManager from '@/components/ElectionManager';
+import AIInsights from '@/components/AIInsights';
 
 interface Election {
   id: number;
@@ -390,6 +392,7 @@ const NewAdmin = () => {
           </div>
           <div className="flex gap-4">
             <LanguageSelector />
+            <VoiceControls />
             <Button onClick={fetchElections} disabled={loading} variant="outline">
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               {t('admin.refreshData')}
@@ -398,10 +401,9 @@ const NewAdmin = () => {
         </div>
 
         <Tabs defaultValue="manage" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="manage">{t('elections.title')}</TabsTrigger>
             <TabsTrigger value="analytics">{t('admin.analytics')}</TabsTrigger>
-            <TabsTrigger value="overview">{t('admin.overview')}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="manage" className="space-y-6">
@@ -485,7 +487,14 @@ const NewAdmin = () => {
                       </Card>
                     </div>
 
-                    {/* Vote Distribution Charts */}
+                     {/* AI Insights */}
+                     <AIInsights 
+                       election={electionAnalytics.election}
+                       candidates={electionAnalytics.candidates}
+                       winner={electionAnalytics.winner}
+                     />
+
+                     {/* Vote Distribution Charts */}
                     {electionAnalytics.candidates.length > 0 && (
                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <Card className="p-6">
@@ -560,61 +569,6 @@ const NewAdmin = () => {
                 )}
               </Card>
             )}
-          </TabsContent>
-
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="p-6">
-                <div className="text-center">
-                  <BarChart3 className="w-12 h-12 mx-auto mb-4 text-primary" />
-                  <h3 className="text-2xl font-bold">{elections.length}</h3>
-                  <p className="text-muted-foreground">{t('elections.title')}</p>
-                </div>
-              </Card>
-              <Card className="p-6">
-                <div className="text-center">
-                  <Users className="w-12 h-12 mx-auto mb-4 text-success" />
-                  <h3 className="text-2xl font-bold">
-                    {elections.reduce((sum, election) => sum + election.totalVotes, 0)}
-                  </h3>
-                  <p className="text-muted-foreground">{t('admin.totalVotes')}</p>
-                </div>
-              </Card>
-              <Card className="p-6">
-                <div className="text-center">
-                  <CheckCircle className="w-12 h-12 mx-auto mb-4 text-accent" />
-                  <h3 className="text-2xl font-bold">
-                    {elections.filter(e => e.active).length}
-                  </h3>
-                  <p className="text-muted-foreground">{t('admin.active')}</p>
-                </div>
-              </Card>
-            </div>
-
-            <Card className="p-6">
-              <h3 className="text-xl font-semibold mb-4">{t('elections.title')}</h3>
-              <div className="space-y-3">
-                {elections.map((election) => (
-                  <div key={election.id} className="flex justify-between items-center p-4 border rounded-lg">
-                    <div>
-                      <h4 className="font-semibold">{election.title}</h4>
-                      <p className="text-sm text-muted-foreground">{election.description}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatDate(election.startTime)} - {formatDate(election.endTime)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant={election.active ? 'default' : 'outline'}>
-                        {election.active ? t('admin.active') : t('admin.ended')}
-                      </Badge>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {election.totalVotes} {t('voting.candidateVotes')}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
           </TabsContent>
         </Tabs>
       </div>

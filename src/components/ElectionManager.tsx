@@ -139,10 +139,12 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
         return;
       }
 
+      console.log('Creating election with candidates:', validCandidates);
+      
       const tx = await contract.createElection(
         newElection.title,
         newElection.description,
-        validCandidates,
+        validCandidates, // Full candidate names should be preserved
         startTimestamp,
         endTimestamp
       );
