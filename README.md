@@ -97,36 +97,6 @@ npm install
 cd backend
 npm install
 
-
-### 2. Environment Setup
-
-bash
-# Backend configuration
-cd backend
-cp .env.example .env
-
-# Edit .env with your configuration:
-# - Set JWT_SECRET to a strong random string
-# - Optionally set ADMIN_PRIVATE_KEY for development
-
-
-### 3. Start Development Servers
-
-bash
-# Terminal 1: Start backend server
-cd backend
-npm run dev
-
-# Terminal 2: Start frontend development server
-cd ../
-npm run dev
-
-
-d development server
-cd ../
-npm run dev
-
-
 ## 📊 Analytics Features
 
 ### Vote Analytics
