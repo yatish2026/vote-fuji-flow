@@ -1,14 +1,14 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Vote, 
-  Shield, 
-  Users, 
-  CheckCircle, 
-  BarChart3, 
-  Wallet, 
-  Globe, 
+import {
+  Vote,
+  Shield,
+  Users,
+  CheckCircle,
+  BarChart3,
+  Wallet,
+  Globe,
   Lock,
   ArrowRight,
   Zap
@@ -22,26 +22,37 @@ const Landing = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
+  // 🔹 Updated Features
   const features = [
     {
-      icon: <BarChart3 className="w-8 h-8" />,
-      title: t('landing.features.multipleElections'),
-      description: t('landing.features.multipleElectionsDesc')
-    },
-    {
-      icon: <Wallet className="w-8 h-8" />,
-      title: t('landing.features.walletAuth'),
-      description: t('landing.features.walletAuthDesc')
-    },
-    {
       icon: <Shield className="w-8 h-8" />,
-      title: t('landing.features.transparentVoting'),
-      description: t('landing.features.transparentVotingDesc')
+      title: "Secure Elections",
+      description: "Tamper-proof voting powered by Avalanche Blockchain"
+    },
+    {
+      icon: <BarChart3 className="w-8 h-8" />,
+      title: "Multi-Election Support",
+      description: "Admin can create and manage multiple elections"
     },
     {
       icon: <Globe className="w-8 h-8" />,
-      title: t('landing.features.auditableResults'),
-      description: t('landing.features.auditableResultsDesc')
+      title: "Transparent Results",
+      description: "Fully auditable and transparent public results"
+    },
+    {
+      icon: <Wallet className="w-8 h-8" />,
+      title: "Dual Login",
+      description: "login with Voter ID/PAN + Web3 Wallet authentication"
+    },
+    {
+      icon: <Users className="w-8 h-8" />,
+      title: "Candidate Management",
+      description: "Create, track, and fix candidate name issues"
+    },
+    {
+      icon: <CheckCircle className="w-8 h-8" />,
+      title: "Modern UI",
+      description: "Smooth and responsive interface for voters & admins"
     }
   ];
 
@@ -74,7 +85,7 @@ const Landing = () => {
           <div className="space-y-4">
             <Badge variant="secondary" className="px-4 py-2">
               <Zap className="w-4 h-4 mr-2" />
-              {t('landing.poweredByAvalanche')}
+              Powered by Avalanche
             </Badge>
             <h1 className="text-5xl md:text-7xl font-bold">
               <span className="bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
@@ -88,7 +99,7 @@ const Landing = () => {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-center">
-            <Card 
+            <Card
               className="p-8 cursor-pointer hover:shadow-elegant transition-all duration-300 hover:scale-105 bg-gradient-to-br from-primary/10 to-accent/10 border-primary/20"
               onClick={() => navigate('/vote')}
             >
@@ -105,7 +116,7 @@ const Landing = () => {
               </div>
             </Card>
 
-            <Card 
+            <Card
               className="p-8 cursor-pointer hover:shadow-elegant transition-all duration-300 hover:scale-105 bg-gradient-to-br from-accent/10 to-warning/10 border-accent/20"
               onClick={() => navigate('/admin')}
             >
@@ -128,15 +139,11 @@ const Landing = () => {
       {/* Features Section */}
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            {t('landing.features.title')}
-          </h2>
-          <p className="text-xl text-muted-foreground">
-            {t('landing.features.subtitle')}
-          </p>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Key Features</h2>
+          <p className="text-xl text-muted-foreground">Everything you need for secure blockchain voting</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((feature, index) => (
             <Card key={index} className="p-6 text-center hover:shadow-lg transition-all duration-300">
               <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full flex items-center justify-center text-primary">
@@ -157,16 +164,16 @@ const Landing = () => {
               <div className="w-12 h-12 bg-destructive rounded-full flex items-center justify-center">
                 <Lock className="w-6 h-6 text-destructive-foreground" />
               </div>
-              <h3 className="text-2xl font-bold">{t('landing.poweredByAvalanche')}</h3>
+              <h3 className="text-2xl font-bold">Powered by Avalanche</h3>
             </div>
             <p className="text-muted-foreground max-w-2xl mx-auto">
               {t('landing.avalancheDescription')}
             </p>
             <div className="flex flex-wrap justify-center gap-4 mt-6">
-              <Badge variant="outline">⚡ {t('landing.fastTransactions')}</Badge>
-              <Badge variant="outline">🔒 {t('landing.secureNetwork')}</Badge>
-              <Badge variant="outline">🌍 {t('landing.decentralized')}</Badge>
-              <Badge variant="outline">💰 {t('landing.lowFees')}</Badge>
+              <Badge variant="outline">⚡ Fast Transactions</Badge>
+              <Badge variant="outline">🔒 Secure Network</Badge>
+              <Badge variant="outline">🌍 Decentralized</Badge>
+              <Badge variant="outline">💰 Low Fees</Badge>
             </div>
           </div>
         </Card>
