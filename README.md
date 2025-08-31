@@ -163,32 +163,9 @@ npm run test:integration
 - [ ] CSV export functions
 - [ ] Election timer updates
 
-## 🌐 Deployment
 
-### Backend Deployment (Render/Heroku/Railway)
-
-1. **Environment Variables**:
-   ```
-   PORT=3001
-   NODE_ENV=production
-   FUJI_RPC_URL=https://api.avax-test.network/ext/bc/C/rpc
-   CONTRACT_ADDRESS=0xa982db91EaF445C7928d30e37FfE4575125F8523
-   JWT_SECRET=your-production-secret
    ```
 
-2. **Deploy Commands**:
-   ```bash
-   npm install
-   npm start
-   ```
-
-### Frontend Deployment (Vercel/Netlify)
-
-1. **Build Settings**:
-   - Build Command: `npm run build`
-   - Output Directory: `dist`
-
-2. **Environment Variables**: (None required for frontend)
 
 ## 🔧 Development
 ### Project Structure
