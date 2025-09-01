@@ -5,6 +5,7 @@ A decentralized, transparent, and secure blockchain voting platform built on Ava
 ## project :http://vote-fuji-flow.netlify.app
 make sure to have wallet to explore in deatil
 
+
 ## 🌟 Features
 
 - **🔗 Blockchain Integration**: Built on Avalanche C-Chain for transparency and immutability
@@ -50,6 +51,9 @@ Accessibility & UX
 🔊 Text-to-speech support for accessibility.
 
 AI Insights
+
+we have built AND TRAINED AN AI AGENT  to analyze voters data pls do check out ,                 
+https://avalanche-analytics-agentic-ai.onrender.com/
 
 🤖 After election closes, AI generates insights like:
 
