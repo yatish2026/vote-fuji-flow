@@ -75,9 +75,8 @@ Bridges AI + Blockchain storytelling for hackathons
 - **Address**: `0xa982db91EaF445C7928d30e37FfE4575125F8523`
 - **Network**: Avalanche Fuji Testnet
 - **Features**: Vote recording, election timing, admin controls,Analytics Engine 
-
+- **
 ## 🚀 Quick Start
-
 ### Prerequisites
 - Node.js 18+ and npm
 - MetaMask or Core Wallet browser extension
