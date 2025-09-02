@@ -187,4 +187,12 @@ This project demonstrates:
 - ✅ **Production Ready**: 
 
 ---
+
 **Built with ❤️ for the Avalanche ecosystem**
+
+## 👥 Team
+
+- [Yatish](https://github.com/yatish2026)
+- [Raj](https://github.com/yatish2026)
+- [Shaz](https://github.com/khateebshaziya26)
+- [Dia](https://github.com/Dcodex26)
