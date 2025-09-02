@@ -121,13 +121,24 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
       // Fetch candidates
       const candidatesList: Candidate[] = [];
       for (let i = 0; i < Number(candidatesCount); i++) {
-        const [candidateId, candidateName, candidateVotes] = await contract.getCandidate(electionId, i);
-        console.log(`Candidate ${i}:`, candidateName, 'Votes:', candidateVotes);
-        candidatesList.push({
-          id: Number(candidateId),
-          name: candidateName, // This should preserve the full candidate name
-          votes: Number(candidateVotes)
-        });
+        try {
+          const [candidateId, candidateName, candidateVotes] = await contract.getCandidate(electionId, i);
+          console.log(`Candidate ${i}:`, 'ID:', candidateId, 'Name:', candidateName, 'Votes:', candidateVotes);
+          
+          // Ensure we have the full candidate name
+          const fullName = candidateName.toString().trim();
+          if (fullName) {
+            candidatesList.push({
+              id: Number(candidateId),
+              name: fullName, // Use the full name from the contract
+              votes: Number(candidateVotes)
+            });
+          } else {
+            console.warn(`Empty candidate name for candidate ${i}`);
+          }
+        } catch (error) {
+          console.error(`Error fetching candidate ${i}:`, error);
+        }
       }
 
       setCandidates(candidatesList);
