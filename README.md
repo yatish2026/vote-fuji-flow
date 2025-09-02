@@ -5,6 +5,7 @@ A decentralized, transparent, and secure blockchain voting platform built on Ava
 ## project :http://vote-fuji-flow.netlify.app
 make sure to have wallet to explore in deatil
 
+
 ## 🌟 Features
 
 - **🔗 Blockchain Integration**: Built on Avalanche C-Chain for transparency and immutability
@@ -51,6 +52,9 @@ Accessibility & UX
 
 AI Insights
 
+we have built AND TRAINED AN AI AGENT  to analyze voters data pls do check out ,                 
+https://avalanche-analytics-agentic-ai.onrender.com/
+
 🤖 After election closes, AI generates insights like:
 
 Turnout trends (e.g., +30% vs last election)
@@ -96,36 +100,6 @@ npm install
 cd backend
 npm install
 
-
-### 2. Environment Setup
-
-bash
-# Backend configuration
-cd backend
-cp .env.example .env
-
-# Edit .env with your configuration:
-# - Set JWT_SECRET to a strong random string
-# - Optionally set ADMIN_PRIVATE_KEY for development
-
-
-### 3. Start Development Servers
-
-bash
-# Terminal 1: Start backend server
-cd backend
-npm run dev
-
-# Terminal 2: Start frontend development server
-cd ../
-npm run dev
-
-
-d development server
-cd ../
-npm run dev
-
-
 ## 📊 Analytics Features
 
 ### Vote Analytics
@@ -162,32 +136,9 @@ npm run test:integration
 - [ ] CSV export functions
 - [ ] Election timer updates
 
-## 🌐 Deployment
 
-### Backend Deployment (Render/Heroku/Railway)
-
-1. **Environment Variables**:
-   ```
-   PORT=3001
-   NODE_ENV=production
-   FUJI_RPC_URL=https://api.avax-test.network/ext/bc/C/rpc
-   CONTRACT_ADDRESS=0xa982db91EaF445C7928d30e37FfE4575125F8523
-   JWT_SECRET=your-production-secret
    ```
 
-2. **Deploy Commands**:
-   ```bash
-   npm install
-   npm start
-   ```
-
-### Frontend Deployment (Vercel/Netlify)
-
-1. **Build Settings**:
-   - Build Command: `npm run build`
-   - Output Directory: `dist`
-
-2. **Environment Variables**: (None required for frontend)
 
 ## 🔧 Development
 ### Project Structure
