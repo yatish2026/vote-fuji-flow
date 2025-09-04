@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Calendar, Users, BarChart3, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { Plus, Calendar, Users, BarChart3, Clock, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
 import { ethers } from 'ethers';
 import { FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI } from '@/lib/contract';
 import { useTranslation } from 'react-i18next';
@@ -25,9 +25,10 @@ interface Election {
 interface ElectionManagerProps {
   onElectionSelect: (electionId: number) => void;
   selectedElectionId?: number;
+  onElectionDeleted?: () => void;
 }
 
-const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, selectedElectionId }) => {
+const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, selectedElectionId, onElectionDeleted }) => {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [elections, setElections] = useState<Election[]>([]);
@@ -278,6 +279,45 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
     }));
   };
 
+  const deleteElection = async (electionId: number, electionTitle: string) => {
+    if (!window.confirm(`${t('elections.confirmDelete')} "${electionTitle}"?`)) {
+      return;
+    }
+
+    try {
+      // @ts-ignore
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, signer);
+
+      const tx = await contract.deleteElection(electionId);
+      
+      toast({
+        title: t('voting.voting'),
+        description: t('elections.deletingElection'),
+        variant: "default"
+      });
+
+      await tx.wait();
+
+      toast({
+        title: t('common.success'),
+        description: t('elections.electionDeleted'),
+        variant: "default"
+      });
+
+      fetchElections();
+      onElectionDeleted?.();
+    } catch (error: any) {
+      console.error('Error deleting election:', error);
+      toast({
+        title: t('common.error'),
+        description: error.message || t('elections.deleteElectionError'),
+        variant: 'destructive'
+      });
+    }
+  };
+
   const getElectionStatus = (election: Election) => {
     const now = Math.floor(Date.now() / 1000);
     if (!election.active) return 'ended';
@@ -402,16 +442,29 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
               <div className="space-y-4">
                 <div className="flex justify-between items-start">
                   <h3 className="text-xl font-semibold truncate">{election.title}</h3>
-                  <Badge variant={
-                    status === 'active' ? 'default' :
-                    status === 'upcoming' ? 'secondary' :
-                    status === 'ended' ? 'outline' : 'destructive'
-                  }>
-                    {status === 'active' && <><CheckCircle className="w-3 h-3 mr-1" /> {t('admin.active')}</>}
-                    {status === 'upcoming' && <><Clock className="w-3 h-3 mr-1" /> {t('elections.upcoming')}</>}
-                    {status === 'ended' && <><AlertCircle className="w-3 h-3 mr-1" /> {t('admin.ended')}</>}
-                    {status === 'expired' && <><AlertCircle className="w-3 h-3 mr-1" /> {t('elections.expired')}</>}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={
+                      status === 'active' ? 'default' :
+                      status === 'upcoming' ? 'secondary' :
+                      status === 'ended' ? 'outline' : 'destructive'
+                    }>
+                      {status === 'active' && <><CheckCircle className="w-3 h-3 mr-1" /> {t('admin.active')}</>}
+                      {status === 'upcoming' && <><Clock className="w-3 h-3 mr-1" /> {t('elections.upcoming')}</>}
+                      {status === 'ended' && <><AlertCircle className="w-3 h-3 mr-1" /> {t('admin.ended')}</>}
+                      {status === 'expired' && <><AlertCircle className="w-3 h-3 mr-1" /> {t('elections.expired')}</>}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteElection(election.id, election.title);
+                      }}
+                      className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
                 
                 <p className="text-muted-foreground text-sm line-clamp-2">

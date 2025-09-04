@@ -145,6 +145,10 @@
     "minimumCandidates": "At least 2 candidates required",
     "startTimeFuture": "Start time must be in the future",
     "endTimeAfterStart": "End time must be after start time",
+    "confirmDelete": "Are you sure you want to delete the election",
+    "deletingElection": "Deleting election...",
+    "electionDeleted": "Election deleted successfully",
+    "deleteElectionError": "Failed to delete election",
     "electionNotFound": "Election not found",
     "backToElections": "Back to Elections",
     "notStarted": "Election Not Started Yet"

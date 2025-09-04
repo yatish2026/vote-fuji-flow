@@ -240,8 +240,12 @@ const NewAdmin = () => {
       }
 
       setElections(electionsList);
+      // Select the most recent election (highest ID) instead of first one
       if (electionsList.length > 0 && selectedElectionId === null) {
-        setSelectedElectionId(electionsList[0].id);
+        const mostRecentElection = electionsList.reduce((prev, current) => 
+          (prev.id > current.id) ? prev : current
+        );
+        setSelectedElectionId(mostRecentElection.id);
       }
     } catch (error: any) {
       console.error('Error fetching elections:', error);
@@ -259,6 +263,13 @@ const NewAdmin = () => {
     try {
       // @ts-ignore
       if (!window.ethereum) return;
+
+      // Check if the election exists in our elections list first
+      const electionExists = elections.find(e => e.id === electionId);
+      if (!electionExists) {
+        console.warn(`Election with ID ${electionId} not found in elections list`);
+        return;
+      }
 
       // @ts-ignore
       const provider = new ethers.BrowserProvider(window.ethereum);
@@ -475,6 +486,11 @@ const NewAdmin = () => {
             <ElectionManager 
               onElectionSelect={(id) => setSelectedElectionId(id)}
               selectedElectionId={selectedElectionId}
+              onElectionDeleted={() => {
+                fetchElections();
+                setElectionAnalytics(null);
+                setSelectedElectionId(null);
+              }}
             />
           </TabsContent>
 
