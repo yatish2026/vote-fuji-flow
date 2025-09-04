@@ -95,32 +95,50 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
     try {
       setLoading(true);
       // @ts-ignore
-      if (!window.ethereum) return;
+      if (!window.ethereum) {
+        toast({
+          title: t('common.error'),
+          description: 'MetaMask wallet not found. Please install MetaMask to continue.',
+          variant: 'destructive'
+        });
+        return;
+      }
 
       // @ts-ignore
       const provider = new ethers.BrowserProvider(window.ethereum);
       const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
 
-      // Fetch election details
-      const [title, description, startTime, endTime, active, candidatesCount, totalVotes] = 
-        await contract.getElection(electionId);
+      // Fetch election details with error handling
+      let electionData;
+      try {
+        const [title, description, startTime, endTime, active, candidatesCount, totalVotes] = 
+          await contract.getElection(electionId);
 
-      const electionData: Election = {
-        id: electionId,
-        title,
-        description,
-        startTime: Number(startTime),
-        endTime: Number(endTime),
-        active,
-        candidatesCount: Number(candidatesCount),
-        totalVotes: Number(totalVotes)
-      };
+        electionData = {
+          id: electionId,
+          title,
+          description,
+          startTime: Number(startTime),
+          endTime: Number(endTime),
+          active,
+          candidatesCount: Number(candidatesCount),
+          totalVotes: Number(totalVotes)
+        };
+      } catch (contractError: any) {
+        console.error('Contract error:', contractError);
+        toast({
+          title: t('common.error'),
+          description: 'Failed to connect to smart contract. Please check your network connection.',
+          variant: 'destructive'
+        });
+        return;
+      }
 
       setElection(electionData);
 
       // Fetch candidates
       const candidatesList: Candidate[] = [];
-      for (let i = 0; i < Number(candidatesCount); i++) {
+      for (let i = 0; i < Number(electionData.candidatesCount); i++) {
         try {
           const [candidateId, candidateName, candidateVotes] = await contract.getCandidate(electionId, i);
           console.log(`Candidate ${i}:`, 'ID:', candidateId, 'Name:', candidateName, 'Votes:', candidateVotes);
@@ -144,7 +162,7 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
       setCandidates(candidatesList);
 
       // Get winner if election ended
-      if (!active) {
+      if (!electionData.active) {
         try {
           const [winnerName, winnerVotes] = await contract.getWinner(electionId);
           const winnerData = { name: winnerName, votes: Number(winnerVotes) };
@@ -171,14 +189,14 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
 
       // Calculate time left
       const now = Math.floor(Date.now() / 1000);
-      const remaining = Math.max(0, Number(endTime) - now);
+      const remaining = Math.max(0, Number(electionData.endTime) - now);
       setTimeLeft(remaining);
 
     } catch (error) {
       console.error('Error fetching election data:', error);
       toast({
         title: t('common.error'),
-        description: t('voting.fetchError'),
+        description: 'Failed to fetch election data. Please check your network connection.',
         variant: 'destructive'
       });
     } finally {
@@ -190,11 +208,49 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
     try {
       // @ts-ignore
       if (!window.ethereum) {
-        throw new Error('MetaMask not found');
+        throw new Error('MetaMask wallet not found. Please install MetaMask extension.');
       }
 
+      // Request account access
       // @ts-ignore
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      
+      // @ts-ignore
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      
+      // Check and switch to Fuji network
+      try {
+        const network = await provider.getNetwork();
+        if (network.chainId !== 43113n) { // Fuji testnet
+          // @ts-ignore
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0xa869' }], // 43113 in hex
+          });
+        }
+      } catch (networkError: any) {
+        if (networkError.code === 4902) {
+          // Add Fuji network if not exists
+          // @ts-ignore
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: '0xa869',
+              chainName: 'Avalanche Fuji Testnet',
+              nativeCurrency: {
+                name: 'AVAX',
+                symbol: 'AVAX',
+                decimals: 18,
+              },
+              rpcUrls: ['https://api.avax-test.network/ext/bc/C/rpc'],
+              blockExplorerUrls: ['https://testnet.snowtrace.io/'],
+            }],
+          });
+        } else {
+          throw networkError;
+        }
+      }
+      
       setUserAddress(accounts[0]);
       setIsConnected(true);
 
@@ -204,9 +260,17 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
         variant: 'default'
       });
     } catch (error: any) {
+      let errorMessage = error.message;
+      
+      if (error.code === 4001) {
+        errorMessage = 'User rejected the connection request.';
+      } else if (error.code === -32002) {
+        errorMessage = 'Connection request already pending. Please check MetaMask.';
+      }
+      
       toast({
         title: t('common.error'),
-        description: error.message,
+        description: errorMessage,
         variant: 'destructive'
       });
     }

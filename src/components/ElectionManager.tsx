@@ -48,43 +48,117 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
   const fetchElections = async () => {
     try {
       setLoading(true);
+      
+      // Check if MetaMask is installed
       // @ts-ignore
       if (!window.ethereum) {
         toast({
           title: t('common.error'),
-          description: t('voting.connectWalletFirst'),
+          description: 'MetaMask wallet not found. Please install MetaMask to continue.',
           variant: 'destructive'
         });
         return;
       }
 
+      // Request account access
+      // @ts-ignore
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      
       // @ts-ignore
       const provider = new ethers.BrowserProvider(window.ethereum);
+      
+      // Check network - switch to Fuji if needed
+      try {
+        const network = await provider.getNetwork();
+        if (network.chainId !== 43113n) { // Fuji testnet
+          // @ts-ignore
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0xa869' }], // 43113 in hex
+          });
+        }
+      } catch (networkError: any) {
+        if (networkError.code === 4902) {
+          // Add Fuji network if not exists
+          // @ts-ignore
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: '0xa869',
+              chainName: 'Avalanche Fuji Testnet',
+              nativeCurrency: {
+                name: 'AVAX',
+                symbol: 'AVAX',
+                decimals: 18,
+              },
+              rpcUrls: ['https://api.avax-test.network/ext/bc/C/rpc'],
+              blockExplorerUrls: ['https://testnet.snowtrace.io/'],
+            }],
+          });
+        }
+      }
+
       const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
 
-      const electionCount = await contract.electionCount();
+      // Test contract connection
+      let electionCount;
+      try {
+        electionCount = await contract.electionCount();
+      } catch (contractError: any) {
+        console.error('Contract connection error:', contractError);
+        toast({
+          title: t('common.error'),
+          description: 'Failed to connect to smart contract. Please check your network connection.',
+          variant: 'destructive'
+        });
+        return;
+      }
+
       const electionsList: Election[] = [];
 
       for (let i = 0; i < Number(electionCount); i++) {
-        const election = await contract.elections(i);
-        electionsList.push({
-          id: Number(election.id),
-          title: election.title,
-          description: election.description,
-          startTime: Number(election.startTime),
-          endTime: Number(election.endTime),
-          active: election.active,
-          candidatesCount: Number(election.candidatesCount),
-          totalVotes: Number(election.totalVotes)
-        });
+        try {
+          const election = await contract.elections(i);
+          electionsList.push({
+            id: Number(election.id),
+            title: election.title,
+            description: election.description,
+            startTime: Number(election.startTime),
+            endTime: Number(election.endTime),
+            active: election.active,
+            candidatesCount: Number(election.candidatesCount),
+            totalVotes: Number(election.totalVotes)
+          });
+        } catch (electionError) {
+          console.error(`Error fetching election ${i}:`, electionError);
+          // Continue with other elections
+        }
       }
 
       setElections(electionsList);
+      
+      if (electionsList.length === 0) {
+        toast({
+          title: t('elections.noElections'),
+          description: t('elections.createFirstElection'),
+          variant: 'default'
+        });
+      }
     } catch (error: any) {
       console.error('Error fetching elections:', error);
+      let errorMessage = t('voting.fetchError');
+      
+      if (error.code === 4001) {
+        errorMessage = 'User rejected the connection request.';
+      } else if (error.code === -32002) {
+        errorMessage = 'Connection request already pending. Please check MetaMask.';
+      } else if (error.message?.includes('network')) {
+        errorMessage = 'Network connection error. Please check your internet connection.';
+      }
+      
       toast({
         title: t('common.error'),
-        description: t('voting.fetchError'),
+        description: errorMessage,
         variant: 'destructive'
       });
     } finally {

@@ -103,23 +103,66 @@ const NewAdmin = () => {
 
       // @ts-ignore
       if (!window.ethereum) {
-        throw new Error('MetaMask not found');
+        throw new Error('MetaMask wallet not found. Please install MetaMask extension.');
       }
 
+      // Request account access
       // @ts-ignore
       await window.ethereum.request({ method: 'eth_requestAccounts' });
+      
       // @ts-ignore
       const provider = new ethers.BrowserProvider(window.ethereum);
+      
+      // Check and switch to Fuji network
+      try {
+        const network = await provider.getNetwork();
+        if (network.chainId !== 43113n) { // Fuji testnet
+          // @ts-ignore
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0xa869' }], // 43113 in hex
+          });
+        }
+      } catch (networkError: any) {
+        if (networkError.code === 4902) {
+          // Add Fuji network if not exists
+          // @ts-ignore
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: '0xa869',
+              chainName: 'Avalanche Fuji Testnet',
+              nativeCurrency: {
+                name: 'AVAX',
+                symbol: 'AVAX',
+                decimals: 18,
+              },
+              rpcUrls: ['https://api.avax-test.network/ext/bc/C/rpc'],
+              blockExplorerUrls: ['https://testnet.snowtrace.io/'],
+            }],
+          });
+        } else {
+          throw networkError;
+        }
+      }
+      
       const signer = await provider.getSigner();
       const address = await signer.getAddress();
       setUserAddress(address);
 
-      // Check if user is admin
+      // Test contract connection
       const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
-      const adminAddress = await contract.admin();
+      
+      let adminAddress;
+      try {
+        adminAddress = await contract.admin();
+      } catch (contractError: any) {
+        console.error('Contract error:', contractError);
+        throw new Error('Failed to connect to smart contract. Please check your network connection and try again.');
+      }
 
       if (address.toLowerCase() !== adminAddress.toLowerCase()) {
-        throw new Error('Access denied: You are not the admin of this contract');
+        throw new Error(`Access denied: You are not the admin of this contract. Admin address: ${adminAddress}`);
       }
 
       // Save auth data
@@ -132,14 +175,24 @@ const NewAdmin = () => {
 
       toast({
         title: t('admin.authSuccess'),
-        description: t('admin.authSuccess'),
+        description: 'Successfully authenticated as admin!',
         variant: "default"
       });
     } catch (error: any) {
       console.error('Authentication error:', error);
+      let errorMessage = error.message;
+      
+      if (error.code === 4001) {
+        errorMessage = 'User rejected the connection request.';
+      } else if (error.code === -32002) {
+        errorMessage = 'Connection request already pending. Please check MetaMask.';
+      } else if (error.message?.includes('network')) {
+        errorMessage = 'Network connection error. Please check your internet connection.';
+      }
+      
       toast({
         title: t('admin.authError'),
-        description: error.message,
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -157,21 +210,33 @@ const NewAdmin = () => {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
 
-      const electionCount = await contract.electionCount();
+      let electionCount;
+      try {
+        electionCount = await contract.electionCount();
+      } catch (contractError: any) {
+        console.error('Contract error:', contractError);
+        throw new Error('Failed to connect to smart contract');
+      }
+
       const electionsList: Election[] = [];
 
       for (let i = 0; i < Number(electionCount); i++) {
-        const election = await contract.elections(i);
-        electionsList.push({
-          id: Number(election.id),
-          title: election.title,
-          description: election.description,
-          startTime: Number(election.startTime),
-          endTime: Number(election.endTime),
-          active: election.active,
-          candidatesCount: Number(election.candidatesCount),
-          totalVotes: Number(election.totalVotes)
-        });
+        try {
+          const election = await contract.elections(i);
+          electionsList.push({
+            id: Number(election.id),
+            title: election.title,
+            description: election.description,
+            startTime: Number(election.startTime),
+            endTime: Number(election.endTime),
+            active: election.active,
+            candidatesCount: Number(election.candidatesCount),
+            totalVotes: Number(election.totalVotes)
+          });
+        } catch (electionError) {
+          console.error(`Error fetching election ${i}:`, electionError);
+          // Continue with other elections
+        }
       }
 
       setElections(electionsList);
@@ -182,7 +247,7 @@ const NewAdmin = () => {
       console.error('Error fetching elections:', error);
       toast({
         title: t('common.error'),
-        description: t('voting.fetchError'),
+        description: 'Failed to fetch elections. Please check your network connection.',
         variant: 'destructive'
       });
     } finally {
