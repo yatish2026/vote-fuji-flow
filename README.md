@@ -82,23 +82,11 @@ Bridges AI + Blockchain storytelling for hackathons
 - **
 ## 🚀 Quick Start
 ### Prerequisites
+- Access to Avalanche Fuji Testnet
 - Node.js 18+ and npm
 - MetaMask or Core Wallet browser extension
-- Access to Avalanche Fuji Testnet
 
-### 1. Clone and Install
 
-bash
-# Clone the repository
-git clone <repository-url>
-cd avalanche-voting-platform
-
-# Install frontend dependencies
-npm install
-
-# Install backend dependencies
-cd backend
-npm install
 
 ## 📊 Analytics Features
 
