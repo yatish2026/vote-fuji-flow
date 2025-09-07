@@ -136,28 +136,32 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
 
       setElection(electionData);
 
-      // Fetch candidates
-      const candidatesList: Candidate[] = [];
+      // Fetch candidates in parallel for better performance
+      const candidatePromises = [];
       for (let i = 0; i < Number(electionData.candidatesCount); i++) {
-        try {
-          const [candidateId, candidateName, candidateVotes] = await contract.getCandidate(electionId, i);
+        candidatePromises.push(
+          contract.getCandidate(electionId, i).catch((error: any) => {
+            console.error(`Error fetching candidate ${i}:`, error);
+            return null;
+          })
+        );
+      }
+
+      const candidateResults = await Promise.all(candidatePromises);
+      const candidatesList: Candidate[] = candidateResults
+        .filter(result => result !== null)
+        .map((result, i) => {
+          const [candidateId, candidateName, candidateVotes] = result;
           console.log(`Candidate ${i}:`, 'ID:', candidateId, 'Name:', candidateName, 'Votes:', candidateVotes);
           
-          // Ensure we have the full candidate name
           const fullName = candidateName.toString().trim();
-          if (fullName) {
-            candidatesList.push({
-              id: Number(candidateId),
-              name: fullName, // Use the full name from the contract
-              votes: Number(candidateVotes)
-            });
-          } else {
-            console.warn(`Empty candidate name for candidate ${i}`);
-          }
-        } catch (error) {
-          console.error(`Error fetching candidate ${i}:`, error);
-        }
-      }
+          return {
+            id: Number(candidateId),
+            name: fullName,
+            votes: Number(candidateVotes)
+          };
+        })
+        .filter(candidate => candidate.name.length > 0);
 
       setCandidates(candidatesList);
 
@@ -357,10 +361,46 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-background/50 to-primary/5 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">{t('common.loading')}</p>
+      <div className="min-h-screen bg-gradient-to-br from-background via-background/50 to-primary/5">
+        <div className="container mx-auto px-4 py-8">
+          {/* Header skeleton */}
+          <div className="flex justify-between items-start mb-8">
+            <div className="h-8 bg-muted rounded w-32 animate-pulse"></div>
+            <div className="flex gap-4">
+              <div className="h-8 bg-muted rounded w-24 animate-pulse"></div>
+              <div className="h-8 bg-muted rounded w-24 animate-pulse"></div>
+            </div>
+          </div>
+
+          {/* Election info skeleton */}
+          <Card className="p-8 mb-8">
+            <div className="text-center mb-6">
+              <div className="h-10 bg-muted rounded w-3/4 mx-auto mb-2 animate-pulse"></div>
+              <div className="h-6 bg-muted rounded w-1/2 mx-auto animate-pulse"></div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="text-center p-4 bg-muted/20 rounded-lg">
+                  <div className="h-6 bg-muted rounded mx-auto mb-2 w-6 animate-pulse"></div>
+                  <div className="h-4 bg-muted rounded w-3/4 mx-auto mb-1 animate-pulse"></div>
+                  <div className="h-4 bg-muted rounded w-1/2 mx-auto animate-pulse"></div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {/* Voting section skeleton */}
+          <Card className="p-8">
+            <div className="h-8 bg-muted rounded w-48 mx-auto mb-6 animate-pulse"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[...Array(4)].map((_, i) => (
+                <Card key={i} className="p-6">
+                  <div className="h-6 bg-muted rounded w-3/4 mb-4 animate-pulse"></div>
+                  <div className="h-10 bg-muted rounded w-full animate-pulse"></div>
+                </Card>
+              ))}
+            </div>
+          </Card>
         </div>
       </div>
     );

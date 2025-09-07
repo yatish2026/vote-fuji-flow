@@ -218,26 +218,30 @@ const NewAdmin = () => {
         throw new Error('Failed to connect to smart contract');
       }
 
-      const electionsList: Election[] = [];
-
+      // Use parallel fetching for better performance
+      const electionPromises = [];
       for (let i = 0; i < Number(electionCount); i++) {
-        try {
-          const election = await contract.elections(i);
-          electionsList.push({
-            id: Number(election.id),
-            title: election.title,
-            description: election.description,
-            startTime: Number(election.startTime),
-            endTime: Number(election.endTime),
-            active: election.active,
-            candidatesCount: Number(election.candidatesCount),
-            totalVotes: Number(election.totalVotes)
-          });
-        } catch (electionError) {
-          console.error(`Error fetching election ${i}:`, electionError);
-          // Continue with other elections
-        }
+        electionPromises.push(
+          contract.elections(i).catch((error: any) => {
+            console.error(`Error fetching election ${i}:`, error);
+            return null;
+          })
+        );
       }
+
+      const electionResults = await Promise.all(electionPromises);
+      const electionsList: Election[] = electionResults
+        .filter(election => election !== null)
+        .map(election => ({
+          id: Number(election.id),
+          title: election.title,
+          description: election.description,
+          startTime: Number(election.startTime),
+          endTime: Number(election.endTime),
+          active: election.active,
+          candidatesCount: Number(election.candidatesCount),
+          totalVotes: Number(election.totalVotes)
+        }));
 
       setElections(electionsList);
       // Select the most recent election (highest ID) instead of first one
@@ -290,16 +294,28 @@ const NewAdmin = () => {
         totalVotes: Number(totalVotes)
       };
 
-      // Fetch candidates
-      const candidates = [];
+      // Fetch candidates in parallel for better performance
+      const candidatePromises = [];
       for (let i = 0; i < Number(candidatesCount); i++) {
-        const [candidateId, candidateName, candidateVotes] = await contract.getCandidate(electionId, i);
-        candidates.push({
-          id: Number(candidateId),
-          name: candidateName,
-          votes: Number(candidateVotes)
-        });
+        candidatePromises.push(
+          contract.getCandidate(electionId, i).catch((error: any) => {
+            console.error(`Error fetching candidate ${i}:`, error);
+            return null;
+          })
+        );
       }
+
+      const candidateResults = await Promise.all(candidatePromises);
+      const candidates = candidateResults
+        .filter(result => result !== null)
+        .map(result => {
+          const [candidateId, candidateName, candidateVotes] = result;
+          return {
+            id: Number(candidateId),
+            name: candidateName,
+            votes: Number(candidateVotes)
+          };
+        });
 
       let winner = undefined;
       if (!active && Number(totalVotes) > 0) {

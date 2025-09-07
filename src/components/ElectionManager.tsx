@@ -115,26 +115,30 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
         return;
       }
 
-      const electionsList: Election[] = [];
-
+      // Use parallel fetching for better performance
+      const electionPromises = [];
       for (let i = 0; i < Number(electionCount); i++) {
-        try {
-          const election = await contract.elections(i);
-          electionsList.push({
-            id: Number(election.id),
-            title: election.title,
-            description: election.description,
-            startTime: Number(election.startTime),
-            endTime: Number(election.endTime),
-            active: election.active,
-            candidatesCount: Number(election.candidatesCount),
-            totalVotes: Number(election.totalVotes)
-          });
-        } catch (electionError) {
-          console.error(`Error fetching election ${i}:`, electionError);
-          // Continue with other elections
-        }
+        electionPromises.push(
+          contract.elections(i).catch((error: any) => {
+            console.error(`Error fetching election ${i}:`, error);
+            return null;
+          })
+        );
       }
+
+      const electionResults = await Promise.all(electionPromises);
+      const electionsList: Election[] = electionResults
+        .filter(election => election !== null)
+        .map((election, i) => ({
+          id: Number(election.id),
+          title: election.title,
+          description: election.description,
+          startTime: Number(election.startTime),
+          endTime: Number(election.endTime),
+          active: election.active,
+          candidatesCount: Number(election.candidatesCount),
+          totalVotes: Number(election.totalVotes)
+        }));
 
       setElections(electionsList);
       
@@ -426,72 +430,95 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {elections.map((election) => {
-          const status = getElectionStatus(election);
-          return (
-            <Card
-              key={election.id}
-              className={`p-6 cursor-pointer transition-all duration-300 hover:shadow-lg border-2 ${
-                selectedElectionId === election.id 
-                  ? 'border-primary bg-primary/5' 
-                  : 'border-border hover:border-primary/30'
-              }`}
-              onClick={() => onElectionSelect(election.id)}
-            >
+      {loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i} className="p-6">
               <div className="space-y-4">
                 <div className="flex justify-between items-start">
-                  <h3 className="text-xl font-semibold truncate">{election.title}</h3>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={
-                      status === 'active' ? 'default' :
-                      status === 'upcoming' ? 'secondary' :
-                      status === 'ended' ? 'outline' : 'destructive'
-                    }>
-                      {status === 'active' && <><CheckCircle className="w-3 h-3 mr-1" /> {t('admin.active')}</>}
-                      {status === 'upcoming' && <><Clock className="w-3 h-3 mr-1" /> {t('elections.upcoming')}</>}
-                      {status === 'ended' && <><AlertCircle className="w-3 h-3 mr-1" /> {t('admin.ended')}</>}
-                      {status === 'expired' && <><AlertCircle className="w-3 h-3 mr-1" /> {t('elections.expired')}</>}
-                    </Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteElection(election.id, election.title);
-                      }}
-                      className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
+                  <div className="h-6 bg-muted rounded-md w-3/4 animate-pulse"></div>
+                  <div className="h-5 bg-muted rounded-full w-16 animate-pulse"></div>
                 </div>
-                
-                <p className="text-muted-foreground text-sm line-clamp-2">
-                  {election.description}
-                </p>
-                
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Calendar className="w-4 h-4" />
-                    <span>{formatDate(election.startTime)} - {formatDate(election.endTime)}</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-1">
-                      <Users className="w-4 h-4" />
-                      <span>{election.candidatesCount} {t('elections.candidates')}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <BarChart3 className="w-4 h-4" />
-                      <span>{election.totalVotes} {t('admin.totalVotes')}</span>
-                    </div>
-                  </div>
+                <div className="h-4 bg-muted rounded w-full animate-pulse"></div>
+                <div className="h-4 bg-muted rounded w-2/3 animate-pulse"></div>
+                <div className="flex gap-4">
+                  <div className="h-4 bg-muted rounded w-20 animate-pulse"></div>
+                  <div className="h-4 bg-muted rounded w-24 animate-pulse"></div>
                 </div>
               </div>
             </Card>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {!loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {elections.map((election) => {
+            const status = getElectionStatus(election);
+            return (
+              <Card
+                key={election.id}
+                className={`p-6 cursor-pointer transition-all duration-300 hover:shadow-lg border-2 ${
+                  selectedElectionId === election.id 
+                    ? 'border-primary bg-primary/5' 
+                    : 'border-border hover:border-primary/30'
+                }`}
+                onClick={() => onElectionSelect(election.id)}
+              >
+                <div className="space-y-4">
+                  <div className="flex justify-between items-start">
+                    <h3 className="text-xl font-semibold truncate">{election.title}</h3>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={
+                        status === 'active' ? 'default' :
+                        status === 'upcoming' ? 'secondary' :
+                        status === 'ended' ? 'outline' : 'destructive'
+                      }>
+                        {status === 'active' && <><CheckCircle className="w-3 h-3 mr-1" /> {t('admin.active')}</>}
+                        {status === 'upcoming' && <><Clock className="w-3 h-3 mr-1" /> {t('elections.upcoming')}</>}
+                        {status === 'ended' && <><AlertCircle className="w-3 h-3 mr-1" /> {t('admin.ended')}</>}
+                        {status === 'expired' && <><AlertCircle className="w-3 h-3 mr-1" /> {t('elections.expired')}</>}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteElection(election.id, election.title);
+                        }}
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <p className="text-muted-foreground text-sm line-clamp-2">
+                    {election.description}
+                  </p>
+                  
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Calendar className="w-4 h-4" />
+                      <span>{formatDate(election.startTime)} - {formatDate(election.endTime)}</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1">
+                        <Users className="w-4 h-4" />
+                        <span>{election.candidatesCount} {t('elections.candidates')}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <BarChart3 className="w-4 h-4" />
+                        <span>{election.totalVotes} {t('admin.totalVotes')}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {elections.length === 0 && !loading && (
         <Card className="p-12 text-center">
