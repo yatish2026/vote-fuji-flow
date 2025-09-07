@@ -203,6 +203,39 @@ const NewAdmin = () => {
   const fetchElections = async () => {
     try {
       setLoading(true);
+      
+      // Load from cache immediately
+      try {
+        const cached = localStorage.getItem('admin-elections-cache');
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < 20000) { // 20 second cache
+            setElections(data);
+            if (data.length > 0 && selectedElectionId === null) {
+              const mostRecentElection = data.reduce((prev: any, current: any) => 
+                (prev.id > current.id) ? prev : current
+              );
+              setSelectedElectionId(mostRecentElection.id);
+            }
+            setLoading(false);
+            // Continue with fresh fetch in background
+            setTimeout(() => fetchFreshElections(), 50);
+            return;
+          }
+        }
+      } catch (cacheError) {
+        console.log('Cache error:', cacheError);
+      }
+
+      await fetchFreshElections();
+    } catch (error: any) {
+      console.error('Error fetching elections:', error);
+      setLoading(false);
+    }
+  };
+
+  const fetchFreshElections = async () => {
+    try {
       // @ts-ignore
       if (!window.ethereum) return;
 
@@ -210,41 +243,46 @@ const NewAdmin = () => {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
 
-      let electionCount;
-      try {
-        electionCount = await contract.electionCount();
-      } catch (contractError: any) {
-        console.error('Contract error:', contractError);
-        throw new Error('Failed to connect to smart contract');
-      }
+      const electionCount = await contract.electionCount();
 
-      // Use parallel fetching for better performance
-      const electionPromises = [];
-      for (let i = 0; i < Number(electionCount); i++) {
-        electionPromises.push(
-          contract.elections(i).catch((error: any) => {
-            console.error(`Error fetching election ${i}:`, error);
-            return null;
-          })
-        );
+      // Batch process for optimal performance
+      const batchSize = 15;
+      const electionsList: Election[] = [];
+      
+      for (let i = 0; i < Number(electionCount); i += batchSize) {
+        const batch = [];
+        const end = Math.min(i + batchSize, Number(electionCount));
+        
+        for (let j = i; j < end; j++) {
+          batch.push(contract.elections(j).catch(() => null));
+        }
+        
+        const results = await Promise.all(batch);
+        results.forEach(election => {
+          if (election) {
+            electionsList.push({
+              id: Number(election.id),
+              title: election.title,
+              description: election.description,
+              startTime: Number(election.startTime),
+              endTime: Number(election.endTime),
+              active: election.active,
+              candidatesCount: Number(election.candidatesCount),
+              totalVotes: Number(election.totalVotes)
+            });
+          }
+        });
       }
-
-      const electionResults = await Promise.all(electionPromises);
-      const electionsList: Election[] = electionResults
-        .filter(election => election !== null)
-        .map(election => ({
-          id: Number(election.id),
-          title: election.title,
-          description: election.description,
-          startTime: Number(election.startTime),
-          endTime: Number(election.endTime),
-          active: election.active,
-          candidatesCount: Number(election.candidatesCount),
-          totalVotes: Number(election.totalVotes)
-        }));
 
       setElections(electionsList);
-      // Select the most recent election (highest ID) instead of first one
+      
+      // Cache results
+      localStorage.setItem('admin-elections-cache', JSON.stringify({
+        data: electionsList,
+        timestamp: Date.now()
+      }));
+      
+      // Select most recent election if none selected
       if (electionsList.length > 0 && selectedElectionId === null) {
         const mostRecentElection = electionsList.reduce((prev, current) => 
           (prev.id > current.id) ? prev : current
@@ -252,12 +290,7 @@ const NewAdmin = () => {
         setSelectedElectionId(mostRecentElection.id);
       }
     } catch (error: any) {
-      console.error('Error fetching elections:', error);
-      toast({
-        title: t('common.error'),
-        description: 'Failed to fetch elections. Please check your network connection.',
-        variant: 'destructive'
-      });
+      console.error('Fresh fetch error:', error);
     } finally {
       setLoading(false);
     }

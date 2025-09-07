@@ -94,13 +94,38 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
   const fetchElectionData = async () => {
     try {
       setLoading(true);
+      
+      // Check cache first
+      const cacheKey = `election-${electionId}`;
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < 15000) { // 15 second cache
+            setElection(data.election);
+            setCandidates(data.candidates);
+            setWinner(data.winner);
+            setLoading(false);
+            // Still fetch fresh data in background
+            setTimeout(() => fetchFreshElectionData(), 100);
+            return;
+          }
+        }
+      } catch (cacheError) {
+        console.log('Cache error:', cacheError);
+      }
+
+      await fetchFreshElectionData();
+    } catch (error) {
+      console.error('Error fetching election data:', error);
+      setLoading(false);
+    }
+  };
+
+  const fetchFreshElectionData = async () => {
+    try {
       // @ts-ignore
       if (!window.ethereum) {
-        toast({
-          title: t('common.error'),
-          description: 'MetaMask wallet not found. Please install MetaMask to continue.',
-          variant: 'destructive'
-        });
         return;
       }
 
@@ -108,13 +133,22 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
       const provider = new ethers.BrowserProvider(window.ethereum);
       const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
 
-      // Fetch election details with error handling
-      let electionData;
-      try {
-        const [title, description, startTime, endTime, active, candidatesCount, totalVotes] = 
-          await contract.getElection(electionId);
+      // Fetch all data in parallel
+      const [electionResult, candidateResults, winnerResult] = await Promise.allSettled([
+        contract.getElection(electionId),
+        Promise.all(
+          Array.from({ length: 10 }, (_, i) => 
+            contract.getCandidate(electionId, i).catch(() => null)
+          )
+        ),
+        contract.getWinner(electionId).catch(() => null)
+      ]);
 
-        electionData = {
+      // Process election data
+      if (electionResult.status === 'fulfilled') {
+        const [title, description, startTime, endTime, active, candidatesCount, totalVotes] = electionResult.value;
+        
+        const electionData = {
           id: electionId,
           title,
           description,
@@ -124,85 +158,58 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
           candidatesCount: Number(candidatesCount),
           totalVotes: Number(totalVotes)
         };
-      } catch (contractError: any) {
-        console.error('Contract error:', contractError);
-        toast({
-          title: t('common.error'),
-          description: 'Failed to connect to smart contract. Please check your network connection.',
-          variant: 'destructive'
-        });
-        return;
-      }
+        
+        setElection(electionData);
 
-      setElection(electionData);
-
-      // Fetch candidates in parallel for better performance
-      const candidatePromises = [];
-      for (let i = 0; i < Number(electionData.candidatesCount); i++) {
-        candidatePromises.push(
-          contract.getCandidate(electionId, i).catch((error: any) => {
-            console.error(`Error fetching candidate ${i}:`, error);
-            return null;
-          })
-        );
-      }
-
-      const candidateResults = await Promise.all(candidatePromises);
-      const candidatesList: Candidate[] = candidateResults
-        .filter(result => result !== null)
-        .map((result, i) => {
-          const [candidateId, candidateName, candidateVotes] = result;
-          console.log(`Candidate ${i}:`, 'ID:', candidateId, 'Name:', candidateName, 'Votes:', candidateVotes);
-          
-          const fullName = candidateName.toString().trim();
-          return {
-            id: Number(candidateId),
-            name: fullName,
-            votes: Number(candidateVotes)
-          };
-        })
-        .filter(candidate => candidate.name.length > 0);
-
-      setCandidates(candidatesList);
-
-      // Get winner if election ended
-      if (!electionData.active) {
-        try {
-          const [winnerName, winnerVotes] = await contract.getWinner(electionId);
-          const winnerData = { name: winnerName, votes: Number(winnerVotes) };
-          setWinner(winnerData);
-          
-          // Send email results if user provided email
-          if (voterEmail && voterName) {
-            try {
-              await sendElectionResults(
-                voterEmail, 
-                voterName, 
-                electionData.title, 
-                winnerData, 
-                candidatesList
-              );
-            } catch (emailError) {
-              console.log('Email sending failed:', emailError);
-            }
-          }
-        } catch (error) {
-          console.log('No winner yet or error fetching winner');
+        // Process candidates
+        const candidatesList: Candidate[] = [];
+        if (candidateResults.status === 'fulfilled') {
+          candidateResults.value
+            .filter(result => result !== null)
+            .forEach((result, i) => {
+              try {
+                const [candidateId, candidateName, candidateVotes] = result;
+                const fullName = candidateName.toString().trim();
+                if (fullName) {
+                  candidatesList.push({
+                    id: Number(candidateId),
+                    name: fullName,
+                    votes: Number(candidateVotes)
+                  });
+                }
+              } catch (err) {
+                console.log(`Error processing candidate ${i}`);
+              }
+            });
         }
+        setCandidates(candidatesList);
+
+        // Process winner
+        let winnerData = null;
+        if (winnerResult.status === 'fulfilled' && winnerResult.value) {
+          const [winnerName, winnerVotes] = winnerResult.value;
+          winnerData = { name: winnerName, votes: Number(winnerVotes) };
+          setWinner(winnerData);
+        }
+
+        // Cache the results
+        const cacheKey = `election-${electionId}`;
+        localStorage.setItem(cacheKey, JSON.stringify({
+          data: {
+            election: electionData,
+            candidates: candidatesList,
+            winner: winnerData
+          },
+          timestamp: Date.now()
+        }));
+
+        // Calculate time left
+        const now = Math.floor(Date.now() / 1000);
+        const remaining = Math.max(0, Number(electionData.endTime) - now);
+        setTimeLeft(remaining);
       }
-
-      // Calculate time left
-      const now = Math.floor(Date.now() / 1000);
-      const remaining = Math.max(0, Number(electionData.endTime) - now);
-      setTimeLeft(remaining);
-
     } catch (error) {
-      console.error('Error fetching election data:', error);
-      toast({
-        title: t('common.error'),
-        description: 'Failed to fetch election data. Please check your network connection.',
-        variant: 'destructive'
-      });
+      console.error('Error fetching fresh election data:', error);
     } finally {
       setLoading(false);
     }

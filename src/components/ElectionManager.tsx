@@ -43,129 +43,104 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
   });
 
   useEffect(() => {
+    // Load cached data immediately, then fetch fresh data
+    loadCachedElections();
     fetchElections();
   }, []);
+
+  const loadCachedElections = () => {
+    try {
+      const cached = localStorage.getItem('elections-cache');
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        // Use cache if less than 30 seconds old
+        if (Date.now() - timestamp < 30000) {
+          setElections(data);
+          return;
+        }
+      }
+    } catch (error) {
+      console.log('No cached elections found');
+    }
+  };
 
   const fetchElections = async () => {
     try {
       setLoading(true);
       
-      // Check if MetaMask is installed
       // @ts-ignore
       if (!window.ethereum) {
-        toast({
-          title: t('common.error'),
-          description: 'MetaMask wallet not found. Please install MetaMask to continue.',
-          variant: 'destructive'
-        });
+        setLoading(false);
         return;
       }
 
-      // Request account access
-      // @ts-ignore
-      await window.ethereum.request({ method: 'eth_requestAccounts' });
-      
-      // @ts-ignore
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      
-      // Check network - switch to Fuji if needed
       try {
-        const network = await provider.getNetwork();
-        if (network.chainId !== 43113n) { // Fuji testnet
-          // @ts-ignore
-          await window.ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0xa869' }], // 43113 in hex
+        // @ts-ignore
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
+
+        const electionCount = await contract.electionCount();
+
+        // Use batch requests for maximum speed
+        const batchSize = 10;
+        const electionsList: Election[] = [];
+        
+        for (let i = 0; i < Number(electionCount); i += batchSize) {
+          const batch = [];
+          const batchEnd = Math.min(i + batchSize, Number(electionCount));
+          
+          for (let j = i; j < batchEnd; j++) {
+            batch.push(
+              contract.elections(j).catch(() => null)
+            );
+          }
+          
+          const batchResults = await Promise.all(batch);
+          
+          batchResults.forEach((election, index) => {
+            if (election) {
+              electionsList.push({
+                id: Number(election.id),
+                title: election.title,
+                description: election.description,
+                startTime: Number(election.startTime),
+                endTime: Number(election.endTime),
+                active: election.active,
+                candidatesCount: Number(election.candidatesCount),
+                totalVotes: Number(election.totalVotes)
+              });
+            }
           });
         }
-      } catch (networkError: any) {
-        if (networkError.code === 4902) {
-          // Add Fuji network if not exists
-          // @ts-ignore
-          await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [{
-              chainId: '0xa869',
-              chainName: 'Avalanche Fuji Testnet',
-              nativeCurrency: {
-                name: 'AVAX',
-                symbol: 'AVAX',
-                decimals: 18,
-              },
-              rpcUrls: ['https://api.avax-test.network/ext/bc/C/rpc'],
-              blockExplorerUrls: ['https://testnet.snowtrace.io/'],
-            }],
-          });
-        }
-      }
 
-      const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
-
-      // Test contract connection
-      let electionCount;
-      try {
-        electionCount = await contract.electionCount();
-      } catch (contractError: any) {
-        console.error('Contract connection error:', contractError);
-        toast({
-          title: t('common.error'),
-          description: 'Failed to connect to smart contract. Please check your network connection.',
-          variant: 'destructive'
-        });
-        return;
-      }
-
-      // Use parallel fetching for better performance
-      const electionPromises = [];
-      for (let i = 0; i < Number(electionCount); i++) {
-        electionPromises.push(
-          contract.elections(i).catch((error: any) => {
-            console.error(`Error fetching election ${i}:`, error);
-            return null;
-          })
-        );
-      }
-
-      const electionResults = await Promise.all(electionPromises);
-      const electionsList: Election[] = electionResults
-        .filter(election => election !== null)
-        .map((election, i) => ({
-          id: Number(election.id),
-          title: election.title,
-          description: election.description,
-          startTime: Number(election.startTime),
-          endTime: Number(election.endTime),
-          active: election.active,
-          candidatesCount: Number(election.candidatesCount),
-          totalVotes: Number(election.totalVotes)
+        setElections(electionsList);
+        
+        // Cache the results
+        localStorage.setItem('elections-cache', JSON.stringify({
+          data: electionsList,
+          timestamp: Date.now()
         }));
-
-      setElections(electionsList);
-      
-      if (electionsList.length === 0) {
-        toast({
-          title: t('elections.noElections'),
-          description: t('elections.createFirstElection'),
-          variant: 'default'
-        });
+        
+        if (electionsList.length === 0) {
+          toast({
+            title: t('elections.noElections'),
+            description: t('elections.createFirstElection'),
+            variant: 'default'
+          });
+        }
+      } catch (error: any) {
+        console.error('Contract error:', error);
+        // Don't show error if we have cached data
+        if (elections.length === 0) {
+          toast({
+            title: t('common.error'),
+            description: 'Unable to load elections. Please check your connection.',
+            variant: 'destructive'
+          });
+        }
       }
     } catch (error: any) {
       console.error('Error fetching elections:', error);
-      let errorMessage = t('voting.fetchError');
-      
-      if (error.code === 4001) {
-        errorMessage = 'User rejected the connection request.';
-      } else if (error.code === -32002) {
-        errorMessage = 'Connection request already pending. Please check MetaMask.';
-      } else if (error.message?.includes('network')) {
-        errorMessage = 'Network connection error. Please check your internet connection.';
-      }
-      
-      toast({
-        title: t('common.error'),
-        description: errorMessage,
-        variant: 'destructive'
-      });
     } finally {
       setLoading(false);
     }
