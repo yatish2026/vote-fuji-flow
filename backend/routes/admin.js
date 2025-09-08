@@ -117,10 +117,16 @@ router.post('/auth', rateLimit(60000, 3), async (req, res) => {
       return res.status(401).json({ error: 'Invalid signature' });
     }
     
-    // Check if address is admin
-    const adminAddress = await retryContractCall(() => contract.admin());
-    if (address.toLowerCase() !== adminAddress.toLowerCase()) {
-      return res.status(403).json({ error: 'Access denied: Not admin address' });
+    // Check if address is admin (skip in demo mode for hackathon)
+    const isDemoMode = process.env.DEMO_MODE === 'true';
+    
+    if (!isDemoMode) {
+      const adminAddress = await retryContractCall(() => contract.admin());
+      if (address.toLowerCase() !== adminAddress.toLowerCase()) {
+        return res.status(403).json({ error: 'Access denied: Not admin address' });
+      }
+    } else {
+      console.warn(`⚠️  DEMO MODE: Allowing admin access for address: ${address}`);
     }
     
     // Generate JWT token
@@ -128,6 +134,7 @@ router.post('/auth', rateLimit(60000, 3), async (req, res) => {
       { 
         address: address.toLowerCase(), 
         role: 'admin',
+        demoMode: isDemoMode,
         timestamp: Date.now()
       },
       JWT_SECRET,
@@ -137,11 +144,12 @@ router.post('/auth', rateLimit(60000, 3), async (req, res) => {
     // Clean up used nonce
     nonces.delete(nonce);
     
-    console.log(`Admin authenticated: ${address}`);
+    console.log(`Admin authenticated: ${address}${isDemoMode ? ' (DEMO MODE)' : ''}`);
     
     res.json({ 
       token,
       address: address.toLowerCase(),
+      demoMode: isDemoMode,
       expiresIn: 86400 // 24 hours in seconds
     });
   } catch (error) {

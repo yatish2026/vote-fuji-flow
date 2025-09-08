@@ -161,13 +161,17 @@ const NewAdmin = () => {
         throw new Error('Failed to connect to smart contract. Please check your network connection and try again.');
       }
 
-      if (address.toLowerCase() !== adminAddress.toLowerCase()) {
+      // Skip admin check in demo mode for hackathon
+      const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+      
+      if (!isDemoMode && address.toLowerCase() !== adminAddress.toLowerCase()) {
         throw new Error(`Access denied: You are not the admin of this contract. Admin address: ${adminAddress}`);
       }
 
       // Save auth data
       localStorage.setItem('adminAuth', JSON.stringify({
         address,
+        demoMode: isDemoMode,
         timestamp: Date.now()
       }));
 
@@ -175,7 +179,7 @@ const NewAdmin = () => {
 
       toast({
         title: t('admin.authSuccess'),
-        description: 'Successfully authenticated as admin!',
+        description: isDemoMode ? '🎯 Demo access granted for hackathon judges!' : 'Successfully authenticated as admin!',
         variant: "default"
       });
     } catch (error: any) {
@@ -454,8 +458,20 @@ const NewAdmin = () => {
   };
 
   if (!isAuthenticated) {
+    const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true';
+    
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background/50 to-primary/5 flex items-center justify-center relative overflow-hidden">
+        {/* Demo Mode Banner */}
+        {isDemoMode && (
+          <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-center py-2 px-4 z-10">
+            <div className="flex items-center justify-center gap-2 text-sm font-medium">
+              <Trophy className="w-4 h-4" />
+              🎯 HACKATHON DEMO MODE - Any wallet can access admin features for judges!
+            </div>
+          </div>
+        )}
+        
         <div className="absolute top-4 right-4">
           <LanguageSelector />
         </div>
@@ -474,7 +490,10 @@ const NewAdmin = () => {
             {t('admin.title')}
           </h1>
           <p className="text-muted-foreground mb-8 leading-relaxed">
-            {t('admin.authenticate')}
+            {isDemoMode 
+              ? "🎯 Demo Mode Active: Connect any wallet to access admin features for hackathon judging!"
+              : t('admin.authenticate')
+            }
           </p>
           <Button
             onClick={connectWalletAndAuth}
@@ -506,6 +525,16 @@ const NewAdmin = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background/50 to-primary/5">
+      {/* Demo Mode Banner for Main Dashboard */}
+      {import.meta.env.VITE_DEMO_MODE === 'true' && (
+        <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-center py-2 px-4">
+          <div className="flex items-center justify-center gap-2 text-sm font-medium">
+            <Trophy className="w-4 h-4" />
+            🎯 HACKATHON DEMO MODE - Admin access granted for judging purposes | Connected: {userAddress.slice(0, 6)}...{userAddress.slice(-4)}
+          </div>
+        </div>
+      )}
+      
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
