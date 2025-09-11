@@ -2,26 +2,17 @@ import { useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from './use-toast';
 
-interface UseSpeechReturn {
-  speak: (text: string) => void;
-  startListening: (onResult: (transcript: string) => void) => void;
-  stopListening: () => void;
-  isListening: boolean;
-  isSpeaking: boolean;
-  isSupported: boolean;
-}
-
-export const useSpeech = (): UseSpeechReturn => {
+export const useSpeech = () => {
   const { i18n, t } = useTranslation();
   const { toast } = useToast();
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const recognitionRef = useRef(null);
+  const utteranceRef = useRef(null);
 
   // Language mapping for speech services
-  const getLanguageCode = (langCode: string): string => {
-    const languageMap: Record<string, string> = {
+  const getLanguageCode = (langCode) => {
+    const languageMap = {
       'en': 'en-US',
       'hi': 'hi-IN',
       'ta': 'ta-IN',
@@ -39,7 +30,7 @@ export const useSpeech = (): UseSpeechReturn => {
     ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
   // Text-to-Speech function
-  const speak = useCallback((text: string) => {
+  const speak = useCallback((text) => {
     if (!isSupported || !text.trim()) return;
 
     // Stop any current speech
@@ -75,7 +66,7 @@ export const useSpeech = (): UseSpeechReturn => {
   }, [i18n.language, isSupported, t, toast]);
 
   // Speech-to-Text function
-  const startListening = useCallback((onResult: (transcript: string) => void) => {
+  const startListening = useCallback((onResult) => {
     if (!isSupported) {
       toast({
         title: t('common.error'),
@@ -90,7 +81,6 @@ export const useSpeech = (): UseSpeechReturn => {
       recognitionRef.current.stop();
     }
 
-    // @ts-ignore
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
 
