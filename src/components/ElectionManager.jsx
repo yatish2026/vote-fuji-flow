@@ -11,27 +11,10 @@ import { ethers } from 'ethers';
 import { FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI } from '@/lib/contract';
 import { useTranslation } from 'react-i18next';
 
-interface Election {
-  id: number;
-  title: string;
-  description: string;
-  startTime: number;
-  endTime: number;
-  active: boolean;
-  candidatesCount: number;
-  totalVotes: number;
-}
-
-interface ElectionManagerProps {
-  onElectionSelect: (electionId: number) => void;
-  selectedElectionId?: number;
-  onElectionDeleted?: () => void;
-}
-
-const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, selectedElectionId, onElectionDeleted }) => {
+const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDeleted }) => {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [elections, setElections] = useState<Election[]>([]);
+  const [elections, setElections] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newElection, setNewElection] = useState({
@@ -68,14 +51,12 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
     try {
       setLoading(true);
       
-      // @ts-ignore
       if (!window.ethereum) {
         setLoading(false);
         return;
       }
 
       try {
-        // @ts-ignore
         const provider = new ethers.BrowserProvider(window.ethereum);
         const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
 
@@ -83,7 +64,7 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
 
         // Use batch requests for maximum speed
         const batchSize = 10;
-        const electionsList: Election[] = [];
+        const electionsList = [];
         
         for (let i = 0; i < Number(electionCount); i += batchSize) {
           const batch = [];
@@ -128,7 +109,7 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
             variant: 'default'
           });
         }
-      } catch (error: any) {
+      } catch (error) {
         console.error('Contract error:', error);
         // Don't show error if we have cached data
         if (elections.length === 0) {
@@ -139,7 +120,7 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
           });
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error fetching elections:', error);
     } finally {
       setLoading(false);
@@ -167,7 +148,6 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
         return;
       }
 
-      // @ts-ignore
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, signer);
@@ -225,7 +205,7 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
       });
       
       fetchElections();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating election:', error);
       toast({
         title: t('common.error'),
@@ -242,7 +222,7 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
     }));
   };
 
-  const removeCandidateField = (index: number) => {
+  const removeCandidateField = (index) => {
     if (newElection.candidates.length > 2) {
       setNewElection(prev => ({
         ...prev,
@@ -251,20 +231,19 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
     }
   };
 
-  const updateCandidate = (index: number, value: string) => {
+  const updateCandidate = (index, value) => {
     setNewElection(prev => ({
       ...prev,
       candidates: prev.candidates.map((c, i) => i === index ? value : c)
     }));
   };
 
-  const deleteElection = async (electionId: number, electionTitle: string) => {
+  const deleteElection = async (electionId, electionTitle) => {
     if (!window.confirm(`${t('elections.confirmDelete')} "${electionTitle}"?`)) {
       return;
     }
 
     try {
-      // @ts-ignore
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, signer);
@@ -287,7 +266,7 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
 
       fetchElections();
       onElectionDeleted?.();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error deleting election:', error);
       toast({
         title: t('common.error'),
@@ -297,7 +276,7 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
     }
   };
 
-  const getElectionStatus = (election: Election) => {
+  const getElectionStatus = (election) => {
     const now = Math.floor(Date.now() / 1000);
     if (!election.active) return 'ended';
     if (now < election.startTime) return 'upcoming';
@@ -305,7 +284,7 @@ const ElectionManager: React.FC<ElectionManagerProps> = ({ onElectionSelect, sel
     return 'active';
   };
 
-  const formatDate = (timestamp: number) => {
+  const formatDate = (timestamp) => {
     return new Date(timestamp * 1000).toLocaleString();
   };
 

@@ -11,42 +11,11 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useSpeech } from '@/hooks/useSpeech';
 
-interface Election {
-  id: number;
-  title: string;
-  description: string;
-  startTime: number;
-  endTime: number;
-  active: boolean;
-  candidatesCount: number;
-  totalVotes: number;
-}
-
-interface Candidate {
-  id: number;
-  name: string;
-  votes: number;
-}
-
-interface AIInsightsProps {
-  election: Election;
-  candidates: Candidate[];
-  winner?: { name: string; votes: number };
-}
-
-interface InsightData {
-  type: 'success' | 'warning' | 'info' | 'prediction';
-  title: string;
-  description: string;
-  percentage?: number;
-  icon: any;
-}
-
-const AIInsights: React.FC<AIInsightsProps> = ({ election, candidates, winner }) => {
+const AIInsights = ({ election, candidates, winner }) => {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { speak } = useSpeech();
-  const [insights, setInsights] = useState<InsightData[]>([]);
+  const [insights, setInsights] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
@@ -64,7 +33,7 @@ const AIInsights: React.FC<AIInsightsProps> = ({ election, candidates, winner })
     const leader = sortedCandidates[0];
     const runner = sortedCandidates[1];
     
-    const generatedInsights: InsightData[] = [];
+    const generatedInsights = [];
 
     // Voter Turnout Analysis
     const expectedVotes = election.candidatesCount * 100; // Assume 100 votes per candidate as baseline
@@ -191,7 +160,7 @@ const AIInsights: React.FC<AIInsightsProps> = ({ election, candidates, winner })
     speak(insightText);
   };
 
-  const getInsightColor = (type: string) => {
+  const getInsightColor = (type) => {
     switch (type) {
       case 'success': return 'border-green-500 bg-green-500/10';
       case 'warning': return 'border-yellow-500 bg-yellow-500/10';
@@ -201,7 +170,7 @@ const AIInsights: React.FC<AIInsightsProps> = ({ election, candidates, winner })
     }
   };
 
-  const getInsightBadgeVariant = (type: string) => {
+  const getInsightBadgeVariant = (type) => {
     switch (type) {
       case 'success': return 'default';
       case 'warning': return 'destructive';

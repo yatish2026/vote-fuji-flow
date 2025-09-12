@@ -5,18 +5,13 @@ import { Button } from '@/components/ui/button';
 import { useSpeech } from '@/hooks/useSpeech';
 import { useToast } from '@/hooks/use-toast';
 
-interface VoiceControlsProps {
-  onVoiceCommand?: (command: string) => void;
-  compact?: boolean;
-}
-
-export const VoiceControls = ({ onVoiceCommand, compact = false }: VoiceControlsProps) => {
+export const VoiceControls = ({ onVoiceCommand, compact = false }) => {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { speak, startListening, stopListening, isListening, isSpeaking, isSupported } = useSpeech();
   const [lastSpokenText, setLastSpokenText] = useState('');
 
-  const handleVoiceCommand = (transcript: string) => {
+  const handleVoiceCommand = (transcript) => {
     console.log('Processing voice command:', transcript);
     
     // Convert to lowercase for easier matching
@@ -69,7 +64,7 @@ export const VoiceControls = ({ onVoiceCommand, compact = false }: VoiceControls
         description: t('voice.connectingWallet'),
       });
       onVoiceCommand?.('CONNECT_WALLET');
-    } else if (command.includes('admin') || command.includes('प्रशासन') || command.includes('প্রশাসন') || command.includes('ನಿರ್ವಾಹಕ') || command.includes('प्रशासक') || command.includes('நிர்வாகி')) {
+    } else if (command.includes('admin') || command.includes('प्रशासन') || command.includes('প্রশাসন') || command.includes('ನಿರ್ವಾಹಕ') || command.includes('प्रशासक') || command.includes('நிர্வாகி')) {
       toast({
         title: t('common.voiceCommands'),
         description: t('voice.openingAdmin'),
@@ -100,7 +95,7 @@ export const VoiceControls = ({ onVoiceCommand, compact = false }: VoiceControls
     startListening(handleVoiceCommand);
   };
 
-  const handleSpeak = (text?: string) => {
+  const handleSpeak = (text) => {
     const textToSpeak = text || lastSpokenText || t('common.voiceCommandsHelp');
     speak(textToSpeak);
     setLastSpokenText(textToSpeak);

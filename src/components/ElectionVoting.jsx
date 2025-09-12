@@ -16,33 +16,11 @@ import { LanguageSelector } from './LanguageSelector';
 import { VoiceControls } from './VoiceControls';
 import EmailService, { sendElectionResults } from './EmailService';
 
-interface Candidate {
-  id: number;
-  name: string;
-  votes: number;
-}
-
-interface Election {
-  id: number;
-  title: string;
-  description: string;
-  startTime: number;
-  endTime: number;
-  active: boolean;
-  candidatesCount: number;
-  totalVotes: number;
-}
-
-interface ElectionVotingProps {
-  electionId: number;
-  onBack: () => void;
-}
-
-const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) => {
+const ElectionVoting = ({ electionId, onBack }) => {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [election, setElection] = useState<Election | null>(null);
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [election, setElection] = useState(null);
+  const [candidates, setCandidates] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [userAddress, setUserAddress] = useState('');
   const [voterName, setVoterName] = useState('');
@@ -50,8 +28,8 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
   const [isVoting, setIsVoting] = useState(false);
   const [hasVoted, setHasVoted] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [timeLeft, setTimeLeft] = useState<number>(0);
-  const [winner, setWinner] = useState<{ name: string; votes: number } | null>(null);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [winner, setWinner] = useState(null);
   const [emailCollected, setEmailCollected] = useState(false);
 
   useEffect(() => {
@@ -77,9 +55,7 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
 
   const checkWalletConnection = async () => {
     try {
-      // @ts-ignore
       if (window.ethereum) {
-        // @ts-ignore
         const accounts = await window.ethereum.request({ method: 'eth_accounts' });
         if (accounts.length > 0) {
           setUserAddress(accounts[0]);
@@ -124,12 +100,10 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
 
   const fetchFreshElectionData = async () => {
     try {
-      // @ts-ignore
       if (!window.ethereum) {
         return;
       }
 
-      // @ts-ignore
       const provider = new ethers.BrowserProvider(window.ethereum);
       const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
 
@@ -162,7 +136,7 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
         setElection(electionData);
 
         // Process candidates
-        const candidatesList: Candidate[] = [];
+        const candidatesList = [];
         if (candidateResults.status === 'fulfilled') {
           candidateResults.value
             .filter(result => result !== null)
@@ -217,32 +191,27 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
 
   const connectWallet = async () => {
     try {
-      // @ts-ignore
       if (!window.ethereum) {
         throw new Error('MetaMask wallet not found. Please install MetaMask extension.');
       }
 
       // Request account access
-      // @ts-ignore
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       
-      // @ts-ignore
       const provider = new ethers.BrowserProvider(window.ethereum);
       
       // Check and switch to Fuji network
       try {
         const network = await provider.getNetwork();
         if (network.chainId !== 43113n) { // Fuji testnet
-          // @ts-ignore
           await window.ethereum.request({
             method: 'wallet_switchEthereumChain',
             params: [{ chainId: '0xa869' }], // 43113 in hex
           });
         }
-      } catch (networkError: any) {
+      } catch (networkError) {
         if (networkError.code === 4902) {
           // Add Fuji network if not exists
-          // @ts-ignore
           await window.ethereum.request({
             method: 'wallet_addEthereumChain',
             params: [{
@@ -270,7 +239,7 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
         description: t('voting.walletConnected'),
         variant: 'default'
       });
-    } catch (error: any) {
+    } catch (error) {
       let errorMessage = error.message;
       
       if (error.code === 4001) {
@@ -287,7 +256,7 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
     }
   };
 
-  const vote = async (candidateId: number) => {
+  const vote = async (candidateId) => {
     if (!voterName.trim() || !emailCollected) {
       toast({
         title: t('common.error'),
@@ -299,7 +268,6 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
 
     try {
       setIsVoting(true);
-      // @ts-ignore
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, signer);
@@ -323,7 +291,7 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
 
       // Refresh data
       fetchElectionData();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Voting error:', error);
       if (error.message.includes('Already voted')) {
         setHasVoted(true);
@@ -344,13 +312,13 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
     }
   };
 
-  const handleEmailCollected = (email: string, name: string) => {
+  const handleEmailCollected = (email, name) => {
     setVoterEmail(email);
     setVoterName(name);
     setEmailCollected(true);
   };
 
-  const formatTimeLeft = (seconds: number) => {
+  const formatTimeLeft = (seconds) => {
     const days = Math.floor(seconds / 86400);
     const hours = Math.floor((seconds % 86400) / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -362,7 +330,7 @@ const ElectionVoting: React.FC<ElectionVotingProps> = ({ electionId, onBack }) =
     return `${remainingSeconds}s`;
   };
 
-  const formatDate = (timestamp: number) => {
+  const formatDate = (timestamp) => {
     return new Date(timestamp * 1000).toLocaleString();
   };
 

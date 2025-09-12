@@ -6,13 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Mail, Send, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-interface EmailServiceProps {
-  electionTitle: string;
-  onEmailCollected: (email: string, voterName: string) => void;
-  disabled?: boolean;
-}
-
-const EmailService: React.FC<EmailServiceProps> = ({ 
+const EmailService = ({ 
   electionTitle, 
   onEmailCollected, 
   disabled = false 
@@ -23,17 +17,17 @@ const EmailService: React.FC<EmailServiceProps> = ({
   const [voterName, setVoterName] = useState('');
   const [isValid, setIsValid] = useState(false);
 
-  const validateEmail = (email: string) => {
+  const validateEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
   };
 
-  const handleEmailChange = (value: string) => {
+  const handleEmailChange = (value) => {
     setEmail(value);
     setIsValid(validateEmail(value) && voterName.trim().length > 0);
   };
 
-  const handleNameChange = (value: string) => {
+  const handleNameChange = (value) => {
     setVoterName(value);
     setIsValid(validateEmail(email) && value.trim().length > 0);
   };
@@ -118,11 +112,11 @@ const EmailService: React.FC<EmailServiceProps> = ({
 
 // Email sending service (would typically be a backend service)
 export const sendElectionResults = async (
-  email: string, 
-  voterName: string, 
-  electionTitle: string, 
-  winner: { name: string; votes: number },
-  allCandidates: Array<{ name: string; votes: number }>
+  email, 
+  voterName, 
+  electionTitle, 
+  winner,
+  allCandidates
 ) => {
   // This would typically call a backend API
   // For now, we'll simulate the email being sent
