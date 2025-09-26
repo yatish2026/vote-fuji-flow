@@ -4,11 +4,19 @@ const path = require('path');
 const { ethers } = require('ethers');
 require('dotenv').config();
 
+// MongoDB connection
+const connectDB = require('./config/database');
+
 const publicRoutes = require('./routes/public');
 const adminRoutes = require('./routes/admin');
+const authRoutes = require('./routes/auth');
+const govtAdminRoutes = require('./routes/govtAdmin');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Initialize MongoDB connection
+connectDB();
 
 // Middleware
 app.use(cors());
@@ -26,6 +34,8 @@ app.use((req, res, next) => {
 // Routes
 app.use('/api', publicRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/govt-admin', govtAdminRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -80,15 +90,29 @@ app.listen(PORT, '0.0.0.0', () => {
 📋 Contract: ${process.env.CONTRACT_ADDRESS || '0xa982db91EaF445C7928d30e37FfE4575125F8523'}
 
 Available endpoints:
+BLOCKCHAIN ENDPOINTS:
 - GET  /api/health
 - GET  /api/candidates  
 - GET  /api/status
 - GET  /api/results
+
+CORE WALLET ADMIN ENDPOINTS:
 - POST /api/admin/nonce
 - POST /api/admin/auth
 - GET  /api/analytics (admin)
 - POST /api/admin/end-election (admin)
 - GET  /api/admin/export (admin)
+
+GOVERNMENT ID AUTH ENDPOINTS:
+- POST /api/auth/register
+- POST /api/auth/login
+- GET  /api/auth/profile
+- GET  /api/auth/users (admin)
+
+GOVERNMENT ID ADMIN ENDPOINTS:
+- GET  /api/govt-admin/analytics
+- GET  /api/govt-admin/dashboard
+- POST /api/govt-admin/manage-election
   `);
 });
 

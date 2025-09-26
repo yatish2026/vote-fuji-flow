@@ -9,6 +9,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:integration": "node tests/integration.js",
+    "test:auth": "jest tests/auth.test.js",
+    "seed": "node scripts/seedData.js",
     "lint": "eslint .",
     "build": "echo 'No build step required for Node.js backend'",
     "docker:build": "docker build -t avalanche-voting-backend .",
@@ -25,12 +27,14 @@
   "author": "Avalanche Voting Team",
   "license": "MIT",
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "dotenv": "^16.3.1",
     "ethers": "^6.13.0",
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.7.3",
     "multer": "^1.4.5-lts.1",
     "react-i18next": "^15.7.2"
   },
