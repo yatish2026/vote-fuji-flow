@@ -3,9 +3,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from '@/hooks/use-toast';
-import { Wallet, BarChart3, Users, CheckCircle, AlertCircle } from 'lucide-react';
+import { Wallet, BarChart3, Users, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import { ethers } from 'ethers';
 import ElectionManager from '@/components/ElectionManager';
+import AIInsights from '@/components/AIInsights';
+import { FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI } from '@/lib/contract';
 import { useTranslation } from 'react-i18next';
 
 const NewAdmin = () => {
@@ -15,6 +17,10 @@ const NewAdmin = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [selectedElectionId, setSelectedElectionId] = useState(null);
   const [networkName, setNetworkName] = useState('');
+  const [selectedElection, setSelectedElection] = useState(null);
+  const [candidates, setCandidates] = useState([]);
+  const [winner, setWinner] = useState(null);
+  const [loadingElection, setLoadingElection] = useState(false);
 
   useEffect(() => {
     checkIfWalletIsConnected();
@@ -107,11 +113,101 @@ const NewAdmin = () => {
 
   const disconnectWallet = () => {
     setAccount(null);
+    setSelectedElectionId(null);
+    setSelectedElection(null);
     toast({
       title: t('wallet.disconnected'),
       description: t('wallet.successfullyDisconnected'),
       variant: 'default'
     });
+  };
+
+  const handleElectionSelect = async (electionId) => {
+    setSelectedElectionId(electionId);
+    await fetchElectionDetails(electionId);
+  };
+
+  const fetchElectionDetails = async (electionId) => {
+    try {
+      setLoadingElection(true);
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
+
+      // Fetch election and candidates data
+      const [electionResult, candidateResults, winnerResult] = await Promise.allSettled([
+        contract.getElection(electionId),
+        Promise.all(
+          Array.from({ length: 10 }, (_, i) => 
+            contract.getCandidate(electionId, i).catch(() => null)
+          )
+        ),
+        contract.getWinner(electionId).catch(() => null)
+      ]);
+
+      if (electionResult.status === 'fulfilled') {
+        const [title, description, startTime, endTime, active, candidatesCount, totalVotes] = electionResult.value;
+        
+        const electionData = {
+          id: electionId,
+          title,
+          description,
+          startTime: Number(startTime),
+          endTime: Number(endTime),
+          active,
+          candidatesCount: Number(candidatesCount),
+          totalVotes: Number(totalVotes)
+        };
+        
+        setSelectedElection(electionData);
+
+        // Process candidates
+        const candidatesList = [];
+        if (candidateResults.status === 'fulfilled') {
+          candidateResults.value
+            .filter(result => result !== null)
+            .forEach((result) => {
+              try {
+                const [candidateId, candidateName, candidateVotes] = result;
+                const fullName = candidateName.toString().trim();
+                if (fullName) {
+                  candidatesList.push({
+                    id: Number(candidateId),
+                    name: fullName,
+                    votes: Number(candidateVotes)
+                  });
+                }
+              } catch (err) {
+                console.log('Error processing candidate');
+              }
+            });
+        }
+        setCandidates(candidatesList);
+
+        // Process winner
+        let winnerData = null;
+        if (winnerResult.status === 'fulfilled' && winnerResult.value) {
+          const [winnerName, winnerVotes] = winnerResult.value;
+          winnerData = { name: winnerName, votes: Number(winnerVotes) };
+          setWinner(winnerData);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching election details:', error);
+      toast({
+        title: t('common.error'),
+        description: 'Failed to load election details',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoadingElection(false);
+    }
+  };
+
+  const handleBackToList = () => {
+    setSelectedElectionId(null);
+    setSelectedElection(null);
+    setCandidates([]);
+    setWinner(null);
   };
 
   if (!account) {
@@ -212,11 +308,127 @@ const NewAdmin = () => {
 
       {/* Main Content */}
       <div className="container mx-auto px-4 py-8">
-        <ElectionManager
-          onElectionSelect={setSelectedElectionId}
-          selectedElectionId={selectedElectionId}
-          onElectionDeleted={() => setSelectedElectionId(null)}
-        />
+        {!selectedElectionId ? (
+          <ElectionManager
+            onElectionSelect={handleElectionSelect}
+            selectedElectionId={selectedElectionId}
+            onElectionDeleted={() => setSelectedElectionId(null)}
+          />
+        ) : (
+          <div className="space-y-6">
+            <Button 
+              variant="outline" 
+              onClick={handleBackToList}
+              className="border-primary/20"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              {t('elections.backToElections')}
+            </Button>
+
+            {loadingElection ? (
+              <Card className="p-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+                  <p className="mt-4 text-muted-foreground">{t('common.loading')}</p>
+                </div>
+              </Card>
+            ) : selectedElection ? (
+              <>
+                {/* Election Details */}
+                <Card className="p-8 bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-xl border-primary/30">
+                  <div className="text-center mb-6">
+                    <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                      {selectedElection.title}
+                    </h1>
+                    <p className="text-muted-foreground text-lg">{selectedElection.description}</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="text-center p-4 bg-primary/10 rounded-lg">
+                      <CheckCircle className="w-6 h-6 mx-auto mb-2 text-primary" />
+                      <p className="text-sm text-muted-foreground">{t('admin.status')}</p>
+                      <Badge variant={selectedElection.active ? 'default' : 'outline'}>
+                        {selectedElection.active ? t('admin.active') : t('admin.ended')}
+                      </Badge>
+                    </div>
+                    <div className="text-center p-4 bg-accent/10 rounded-lg">
+                      <Users className="w-6 h-6 mx-auto mb-2 text-accent" />
+                      <p className="text-sm text-muted-foreground">{t('elections.candidates')}</p>
+                      <p className="font-semibold">{selectedElection.candidatesCount}</p>
+                    </div>
+                    <div className="text-center p-4 bg-success/10 rounded-lg">
+                      <BarChart3 className="w-6 h-6 mx-auto mb-2 text-success" />
+                      <p className="text-sm text-muted-foreground">{t('admin.totalVotes')}</p>
+                      <p className="font-semibold">{selectedElection.totalVotes}</p>
+                    </div>
+                    <div className="text-center p-4 bg-primary-glow/10 rounded-lg">
+                      <CheckCircle className="w-6 h-6 mx-auto mb-2 text-primary-glow" />
+                      <p className="text-sm text-muted-foreground">{t('admin.winner')}</p>
+                      <p className="font-semibold">{winner ? winner.name : '-'}</p>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Candidates Results */}
+                <Card className="p-6">
+                  <h3 className="text-2xl font-bold mb-6 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                    {t('voting.candidateResults')}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {candidates.map((candidate) => {
+                      const percentage = selectedElection.totalVotes > 0 
+                        ? (candidate.votes / selectedElection.totalVotes) * 100 
+                        : 0;
+                      const isWinner = winner && winner.name === candidate.name;
+
+                      return (
+                        <Card 
+                          key={candidate.id} 
+                          className={`p-6 transition-all ${
+                            isWinner 
+                              ? 'border-2 border-primary bg-primary/5 shadow-elegant' 
+                              : 'border border-border'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <h4 className="font-semibold text-lg flex items-center gap-2">
+                                {candidate.name}
+                                {isWinner && (
+                                  <Badge className="bg-gradient-to-r from-primary to-accent">
+                                    {t('voting.winner')}
+                                  </Badge>
+                                )}
+                              </h4>
+                              <p className="text-sm text-muted-foreground">
+                                {candidate.votes} {t('voting.candidateVotes')} ({percentage.toFixed(1)}%)
+                              </p>
+                            </div>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-3">
+                            <div
+                              className="bg-gradient-to-r from-primary to-accent h-3 rounded-full transition-all duration-500"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </Card>
+
+                {/* AI Insights */}
+                {selectedElection.totalVotes > 0 && (
+                  <AIInsights 
+                    election={selectedElection}
+                    candidates={candidates}
+                    winner={winner}
+                  />
+                )}
+              </>
+            ) : null}
+          </div>
+        )}
       </div>
     </div>
   );
