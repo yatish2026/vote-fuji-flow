@@ -20,6 +20,7 @@ const resources = {
   bn: { translation: bn },
 };
 
+// Initialize i18n synchronously
 i18n
   .use(initReactI18next)
   .init({
@@ -33,6 +34,7 @@ i18n
     react: {
       useSuspense: false,
     },
+    initImmediate: false, // Initialize synchronously
   });
 
 export default i18n;
