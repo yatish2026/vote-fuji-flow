@@ -20,8 +20,8 @@ const resources = {
   bn: { translation: bn },
 };
 
-// Initialize i18n synchronously
-i18n
+// Initialize i18n - this must complete before any component uses useTranslation
+const initPromise = i18n
   .use(initReactI18next)
   .init({
     resources,
@@ -34,7 +34,7 @@ i18n
     react: {
       useSuspense: false,
     },
-    initImmediate: false, // Initialize synchronously
   });
 
+export { initPromise };
 export default i18n;
