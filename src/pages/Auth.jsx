@@ -16,12 +16,12 @@ const Auth = () => {
   const [activeTab, setActiveTab] = useState('login');
 
   // Login state
-  const [loginEmail, setLoginEmail] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [loginIdType, setLoginIdType] = useState('voter'); // 'voter', 'pan', or 'aadhaar'
 
   // Signup state
   const [signupData, setSignupData] = useState({
-    email: '',
     password: '',
     confirmPassword: '',
     fullName: '',
@@ -55,8 +55,18 @@ const Auth = () => {
     setLoading(true);
 
     try {
+      // Call edge function to get email from government ID
+      const { data: emailData, error: emailError } = await supabase.functions.invoke('get-user-email', {
+        body: { govtId: loginId, idType: loginIdType }
+      });
+
+      if (emailError || !emailData.email) {
+        throw new Error('Invalid credentials. Please check your ID and try again.');
+      }
+
+      // Now login with email and password
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: loginEmail,
+        email: emailData.email,
         password: loginPassword
       });
 
@@ -71,7 +81,7 @@ const Auth = () => {
     } catch (error) {
       toast({
         title: 'Error',
-        description: error.message,
+        description: error.message || 'Login failed. Please check your credentials.',
         variant: 'destructive',
       });
     } finally {
@@ -104,9 +114,13 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      // Sign up the user
+      // Generate a unique email from the government ID
+      const primaryId = signupData.voterId || signupData.panCard || signupData.aadhaarCard;
+      const generatedEmail = `${primaryId.replace(/\s/g, '')}@votesystem.internal`;
+
+      // Sign up the user with generated email
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: signupData.email,
+        email: generatedEmail,
         password: signupData.password,
         options: {
           emailRedirectTo: `${window.location.origin}/vote`
@@ -131,7 +145,7 @@ const Auth = () => {
 
       toast({
         title: 'Success!',
-        description: 'Account created successfully. You can now log in.',
+        description: 'Account created successfully. You can now log in with your government ID.',
       });
 
       setActiveTab('login');
@@ -168,13 +182,28 @@ const Auth = () => {
             <TabsContent value="login">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="login-email">Email</Label>
+                  <Label htmlFor="login-id-type">ID Type</Label>
+                  <select
+                    id="login-id-type"
+                    value={loginIdType}
+                    onChange={(e) => setLoginIdType(e.target.value)}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="voter">Voter ID</option>
+                    <option value="pan">PAN Card</option>
+                    <option value="aadhaar">Aadhaar Card</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="login-id">
+                    {loginIdType === 'voter' ? 'Voter ID' : loginIdType === 'pan' ? 'PAN Card' : 'Aadhaar Card'}
+                  </Label>
                   <Input
-                    id="login-email"
-                    type="email"
-                    placeholder="your@email.com"
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
+                    id="login-id"
+                    type="text"
+                    placeholder={`Enter your ${loginIdType === 'voter' ? 'Voter ID' : loginIdType === 'pan' ? 'PAN Card' : 'Aadhaar Card'}`}
+                    value={loginId}
+                    onChange={(e) => setLoginId(e.target.value)}
                     required
                   />
                 </div>
@@ -208,38 +237,6 @@ const Auth = () => {
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    placeholder="your@email.com"
-                    value={signupData.email}
-                    onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    value={signupData.password}
-                    onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
-                    required
-                    minLength={6}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-confirm-password">Confirm Password</Label>
-                  <Input
-                    id="signup-confirm-password"
-                    type="password"
-                    value={signupData.confirmPassword}
-                    onChange={(e) => setSignupData({ ...signupData, confirmPassword: e.target.value })}
-                    required
-                  />
-                </div>
 
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
@@ -260,6 +257,28 @@ const Auth = () => {
                     placeholder="Aadhaar Card"
                     value={signupData.aadhaarCard}
                     onChange={(e) => setSignupData({ ...signupData, aadhaarCard: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="signup-password">Password</Label>
+                  <Input
+                    id="signup-password"
+                    type="password"
+                    value={signupData.password}
+                    onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
+                    required
+                    minLength={6}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-confirm-password">Confirm Password</Label>
+                  <Input
+                    id="signup-confirm-password"
+                    type="password"
+                    value={signupData.confirmPassword}
+                    onChange={(e) => setSignupData({ ...signupData, confirmPassword: e.target.value })}
+                    required
                   />
                 </div>
 
