@@ -1,9 +1,8 @@
 import { useState, useCallback, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n/config';
 import { useToast } from './use-toast';
 
 export const useSpeech = () => {
-  const { i18n, t } = useTranslation();
   const { toast } = useToast();
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -55,7 +54,7 @@ export const useSpeech = () => {
       console.error('Speech synthesis error:', event);
       setIsSpeaking(false);
       toast({
-        title: t('common.error'),
+        title: 'Error',
         description: 'Failed to speak text',
         variant: 'destructive'
       });
@@ -63,14 +62,14 @@ export const useSpeech = () => {
 
     utteranceRef.current = utterance;
     window.speechSynthesis.speak(utterance);
-  }, [i18n.language, isSupported, t, toast]);
+  }, [isSupported, toast]);
 
   // Speech-to-Text function
   const startListening = useCallback((onResult) => {
     if (!isSupported) {
       toast({
-        title: t('common.error'),
-        description: t('common.speechNotSupported'),
+        title: 'Error',
+        description: 'Speech recognition is not supported in your browser',
         variant: 'destructive'
       });
       return;
@@ -92,8 +91,8 @@ export const useSpeech = () => {
     recognition.onstart = () => {
       setIsListening(true);
       toast({
-        title: t('common.voiceCommands'),
-        description: t('common.listeningForVoice'),
+        title: 'Voice Commands',
+        description: 'Listening for your voice...',
       });
     };
 
@@ -107,7 +106,7 @@ export const useSpeech = () => {
       console.error('Speech recognition error:', event);
       setIsListening(false);
       toast({
-        title: t('common.error'),
+        title: 'Error',
         description: `Speech recognition error: ${event.error}`,
         variant: 'destructive'
       });
@@ -120,7 +119,7 @@ export const useSpeech = () => {
 
     recognitionRef.current = recognition;
     recognition.start();
-  }, [i18n.language, isSupported, t, toast]);
+  }, [isSupported, toast]);
 
   // Stop listening function
   const stopListening = useCallback(() => {
