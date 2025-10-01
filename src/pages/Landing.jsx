@@ -72,9 +72,12 @@ const Landing = () => {
               <p className="text-xs text-muted-foreground">{t('landing.subtitle')}</p>
             </div>
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-4 items-center">
             <LanguageSelector />
             <VoiceControls />
+            <Button onClick={() => navigate('/auth')} variant="outline">
+              Login / Sign Up
+            </Button>
           </div>
         </div>
       </div>

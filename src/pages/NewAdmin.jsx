@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from '@/hooks/use-toast';
-import { Wallet, BarChart3, Users, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { Wallet, BarChart3, Users, CheckCircle, AlertCircle, ArrowLeft, LogOut, Loader2 } from 'lucide-react';
 import { ethers } from 'ethers';
 import ElectionManager from '@/components/ElectionManager';
 import AIInsights from '@/components/AIInsights';
@@ -13,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 const NewAdmin = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [account, setAccount] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [selectedElectionId, setSelectedElectionId] = useState(null);
@@ -21,19 +24,77 @@ const NewAdmin = () => {
   const [candidates, setCandidates] = useState([]);
   const [winner, setWinner] = useState(null);
   const [loadingElection, setLoadingElection] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [profile, setProfile] = useState(null);
 
   useEffect(() => {
-    checkIfWalletIsConnected();
-    if (window.ethereum) {
-      window.ethereum.on('accountsChanged', handleAccountsChanged);
-      window.ethereum.on('chainChanged', () => window.location.reload());
+    checkAuth();
+  }, []);
+
+  useEffect(() => {
+    if (isAdmin) {
+      checkIfWalletIsConnected();
+      if (window.ethereum) {
+        window.ethereum.on('accountsChanged', handleAccountsChanged);
+        window.ethereum.on('chainChanged', () => window.location.reload());
+      }
     }
     return () => {
       if (window.ethereum) {
         window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
       }
     };
-  }, []);
+  }, [isAdmin]);
+
+  const checkAuth = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        navigate('/auth');
+        return;
+      }
+
+      // Check if user has admin role
+      const { data: roles } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', session.user.id)
+        .eq('role', 'admin')
+        .single();
+
+      if (!roles) {
+        toast({
+          title: 'Access Denied',
+          description: 'You need admin privileges to access this page',
+          variant: 'destructive',
+        });
+        navigate('/vote');
+        return;
+      }
+
+      // Get profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+
+      setProfile(profileData);
+      setIsAdmin(true);
+    } catch (error) {
+      console.error('Auth check error:', error);
+      navigate('/auth');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/auth');
+  };
 
   const handleAccountsChanged = (accounts) => {
     if (accounts.length === 0) {
@@ -210,6 +271,14 @@ const NewAdmin = () => {
     setWinner(null);
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   if (!account) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 py-12 px-4">
@@ -296,10 +365,19 @@ const NewAdmin = () => {
                 onClick={disconnectWallet}
                 variant="outline"
                 size="sm"
-                className="border-destructive/50 text-destructive hover:bg-destructive/10"
+                className="border-warning/50 text-warning hover:bg-warning/10"
               >
                 <Wallet className="w-4 h-4 mr-2" />
                 {t('wallet.disconnect')}
+              </Button>
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                size="sm"
+                className="border-destructive/50 text-destructive hover:bg-destructive/10"
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
               </Button>
             </div>
           </div>
