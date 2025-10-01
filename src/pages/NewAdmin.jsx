@@ -56,24 +56,6 @@ const NewAdmin = () => {
         return;
       }
 
-      // Check if user has admin role
-      const { data: roles } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', session.user.id)
-        .eq('role', 'admin')
-        .single();
-
-      if (!roles) {
-        toast({
-          title: 'Access Denied',
-          description: 'You need admin privileges to access this page',
-          variant: 'destructive',
-        });
-        navigate('/vote');
-        return;
-      }
-
       // Get profile
       const { data: profileData } = await supabase
         .from('profiles')
