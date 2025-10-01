@@ -20,8 +20,8 @@ const resources = {
   bn: { translation: bn },
 };
 
-// Initialize i18n and wait for it to complete
-await i18n
+// Initialize i18n and export the promise
+export const i18nInitPromise = i18n
   .use(initReactI18next)
   .init({
     resources,
