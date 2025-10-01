@@ -129,10 +129,21 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
 
   const createElection = async () => {
     try {
+      // Check wallet connection first
+      if (!window.ethereum) {
+        toast({
+          title: t('common.error'),
+          description: 'Please install MetaMask or Core Wallet',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      // Validate form inputs
       if (!newElection.title.trim() || !newElection.description.trim()) {
         toast({
           title: t('common.error'),
-          description: t('elections.fillAllFields'),
+          description: 'Please fill in all required fields',
           variant: 'destructive'
         });
         return;
@@ -142,7 +153,16 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
       if (validCandidates.length < 2) {
         toast({
           title: t('common.error'),
-          description: t('elections.minimumCandidates'),
+          description: 'Please add at least 2 candidates',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      if (!newElection.startTime || !newElection.endTime) {
+        toast({
+          title: t('common.error'),
+          description: 'Please set start and end times',
           variant: 'destructive'
         });
         return;
@@ -158,7 +178,7 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
       if (startTimestamp <= Math.floor(Date.now() / 1000)) {
         toast({
           title: t('common.error'),
-          description: t('elections.startTimeFuture'),
+          description: 'Start time must be in the future',
           variant: 'destructive'
         });
         return;
@@ -167,11 +187,25 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
       if (endTimestamp <= startTimestamp) {
         toast({
           title: t('common.error'),
-          description: t('elections.endTimeAfterStart'),
+          description: 'End time must be after start time',
           variant: 'destructive'
         });
         return;
       }
+
+      console.log('Creating election with:', {
+        title: newElection.title,
+        description: newElection.description,
+        candidates: validCandidates,
+        startTime: startTimestamp,
+        endTime: endTimestamp
+      });
+
+      toast({
+        title: 'Processing',
+        description: 'Please confirm the transaction in your wallet...',
+        variant: 'default'
+      });
 
       const tx = await contract.createElection(
         newElection.title,
@@ -182,16 +216,16 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
       );
 
       toast({
-        title: t('voting.voting'),
-        description: t('elections.creatingElection'),
+        title: 'Transaction Submitted',
+        description: 'Creating election on blockchain...',
         variant: 'default'
       });
 
       await tx.wait();
 
       toast({
-        title: t('common.success'),
-        description: t('elections.electionCreated'),
+        title: 'Success!',
+        description: 'Election created successfully',
         variant: 'default'
       });
 
@@ -204,12 +238,24 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
         endTime: ''
       });
       
-      fetchElections();
+      // Clear cache and refetch
+      localStorage.removeItem('elections-cache');
+      setTimeout(() => {
+        fetchElections();
+      }, 1000);
     } catch (error) {
       console.error('Error creating election:', error);
+      let errorMessage = 'Failed to create election';
+      
+      if (error.code === 4001) {
+        errorMessage = 'Transaction was rejected';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
-        title: t('common.error'),
-        description: error.message || t('elections.createElectionError'),
+        title: 'Error',
+        description: errorMessage,
         variant: 'destructive'
       });
     }
@@ -376,7 +422,11 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
                   />
                 </div>
               </div>
-              <Button onClick={createElection} className="w-full">
+              <Button 
+                onClick={createElection} 
+                className="w-full bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
+                type="button"
+              >
                 {t('elections.createElection')}
               </Button>
             </div>
