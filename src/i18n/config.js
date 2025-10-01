@@ -20,8 +20,8 @@ const resources = {
   bn: { translation: bn },
 };
 
-// Initialize i18n synchronously before any component mounts
-i18n
+// Initialize i18n and wait for it to complete
+await i18n
   .use(initReactI18next)
   .init({
     resources,

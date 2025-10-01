@@ -3,7 +3,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import './i18n/config'; // Initialize i18n before any components render
 import Landing from "./pages/Landing";
 import NewVote from "./pages/NewVote";
 import NewAdmin from "./pages/NewAdmin";
