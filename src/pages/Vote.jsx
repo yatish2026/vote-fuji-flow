@@ -3,173 +3,154 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { VoiceControls } from '@/components/VoiceControls';
 import { useSpeech } from '@/hooks/useSpeech';
-import { Clock, Vote as VoteIcon, CheckCircle, Wallet, Shield, Zap, Globe, Activity } from 'lucide-react';
+import { Clock, Vote as VoteIcon, CheckCircle, Wallet, Shield, Zap, Globe, Activity, Calendar, Users, BarChart3, AlertCircle, ArrowLeft } from 'lucide-react';
 import { ethers } from 'ethers';
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../lib/contract';
+import { FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI } from '../lib/contract';
+import AIInsights from '@/components/AIInsights';
 
 const Vote = () => {
   const { t } = useTranslation();
   const { speak } = useSpeech();
-  console.log('Vote component rendering...');
+  const [elections, setElections] = useState([]);
+  const [selectedElectionId, setSelectedElectionId] = useState(null);
+  const [selectedElection, setSelectedElection] = useState(null);
   const [candidates, setCandidates] = useState([]);
-  const [status, setStatus] = useState(null);
-  const [voterName, setVoterName] = useState('');
+  const [winner, setWinner] = useState(null);
   const [hasVoted, setHasVoted] = useState(false);
   const [voting, setVoting] = useState(false);
   const [connected, setConnected] = useState(false);
   const [userAddress, setUserAddress] = useState('');
-  const [timeLeft, setTimeLeft] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [loadingElection, setLoadingElection] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchCandidates();
-    fetchElectionStatus();
     checkWalletConnection();
-    
-    const interval = setInterval(fetchElectionStatus, 10000); // Update every 10 seconds
-    return () => clearInterval(interval);
+    fetchElections();
   }, []);
 
-  useEffect(() => {
-    if (status && status.timeLeftSeconds > 0) {
-      const timer = setInterval(() => {
-        const now = Math.floor(Date.now() / 1000);
-        const remaining = status.electionEndTime - now;
-        
-        if (remaining <= 0) {
-          setTimeLeft('Election Ended');
-          return;
+  const fetchElections = async () => {
+    try {
+      setLoading(true);
+      
+      if (!window.ethereum) {
+        setLoading(false);
+        return;
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
+
+      const electionCount = await contract.electionCount();
+      const electionsList = [];
+      
+      for (let i = 0; i < Number(electionCount); i++) {
+        try {
+          const election = await contract.elections(i);
+          electionsList.push({
+            id: Number(election.id),
+            title: election.title,
+            description: election.description,
+            startTime: Number(election.startTime),
+            endTime: Number(election.endTime),
+            active: election.active,
+            candidatesCount: Number(election.candidatesCount),
+            totalVotes: Number(election.totalVotes)
+          });
+        } catch (error) {
+          console.error('Error fetching election:', i, error);
         }
-        
-        const hours = Math.floor(remaining / 3600);
-        const minutes = Math.floor((remaining % 3600) / 60);
-        const seconds = remaining % 60;
-        
-        setTimeLeft(`${hours}h ${minutes}m ${seconds}s`);
-      }, 1000);
-
-      return () => clearInterval(timer);
-    }
-  }, [status]);
-
-  const fetchCandidates = async () => {
-    try {
-      console.log('Fetching candidates...');
-      const response = await fetch('/api/candidates');
-      console.log('Candidates response:', response.status);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        console.error('Backend not responding - fetching candidates from contract');
-        await fetchCandidatesFromContract();
-        return;
-      }
-      
-      const data = await response.json();
-      const candidatesWithIndex = data.candidates.map((name, index) => ({
-        name,
-        index
-      }));
-      setCandidates(candidatesWithIndex);
+
+      setElections(electionsList);
     } catch (error) {
-      console.error('Error fetching candidates:', error);
-      await fetchCandidatesFromContract();
-    }
-  };
-
-  const fetchCandidatesFromContract = async () => {
-    try {
-      console.log('Fetching candidates directly from contract...');
-      if (window.ethereum) {
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-        
-        const candidateNames = await contract.getCandidates();
-        const candidatesWithIndex = candidateNames.map((name, index) => ({
-          name,
-          index
-        }));
-        
-        console.log('Contract candidates:', candidatesWithIndex);
-        setCandidates(candidatesWithIndex);
-      }
-    } catch (error) {
-      console.error('Error fetching candidates from contract:', error);
+      console.error('Error fetching elections:', error);
       toast({
-        title: "Error",
-        description: "Failed to fetch candidates from contract",
-        variant: "destructive"
+        title: t('common.error'),
+        description: 'Unable to load elections',
+        variant: 'destructive'
       });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const fetchElectionStatus = async () => {
+  const fetchElectionDetails = async (electionId) => {
     try {
-      console.log('Fetching election status...');
-      const response = await fetch('/api/status');
-      console.log('Status response:', response.status, response.headers.get('content-type'));
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        console.error('Backend not responding with JSON - likely not running');
-        // Fallback: try to get status directly from contract
-        await fetchStatusFromContract();
-        return;
-      }
-      
-      const data = await response.json();
-      console.log('Status data:', data);
-      setStatus(data);
-    } catch (error) {
-      console.error('Error fetching status:', error);
-      // Fallback: try to get status directly from contract
-      await fetchStatusFromContract();
-    }
-  };
+      setLoadingElection(true);
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
 
-  const fetchStatusFromContract = async () => {
-    try {
-      console.log('Fetching status directly from contract...');
-      if (window.ethereum) {
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+      const [electionResult, candidateResults, winnerResult] = await Promise.allSettled([
+        contract.getElection(electionId),
+        Promise.all(
+          Array.from({ length: 10 }, (_, i) => 
+            contract.getCandidate(electionId, i).catch(() => null)
+          )
+        ),
+        contract.getWinner(electionId).catch(() => null)
+      ]);
+
+      if (electionResult.status === 'fulfilled') {
+        const [title, description, startTime, endTime, active, candidatesCount, totalVotes] = electionResult.value;
         
-        const [isActive, timeLeft, endTime] = await Promise.all([
-          contract.isElectionActive(),
-          contract.timeLeft(),
-          contract.electionEndTime()
-        ]);
-        
-        const statusData = {
-          electionActive: isActive,
-          timeLeftSeconds: Number(timeLeft),
-          electionEndTime: Number(endTime)
-        };
-        
-        console.log('Contract status:', statusData);
-        setStatus(statusData);
+        setSelectedElection({
+          id: electionId,
+          title,
+          description,
+          startTime: Number(startTime),
+          endTime: Number(endTime),
+          active,
+          candidatesCount: Number(candidatesCount),
+          totalVotes: Number(totalVotes)
+        });
+
+        const candidatesList = [];
+        if (candidateResults.status === 'fulfilled') {
+          candidateResults.value
+            .filter(result => result !== null)
+            .forEach((result) => {
+              try {
+                const [candidateId, candidateName, candidateVotes] = result;
+                const fullName = candidateName.toString().trim();
+                if (fullName) {
+                  candidatesList.push({
+                    id: Number(candidateId),
+                    name: fullName,
+                    votes: Number(candidateVotes)
+                  });
+                }
+              } catch (err) {
+                console.log('Error processing candidate');
+              }
+            });
+        }
+        setCandidates(candidatesList);
+
+        let winnerData = null;
+        if (winnerResult.status === 'fulfilled' && winnerResult.value) {
+          const [winnerName, winnerVotes] = winnerResult.value;
+          winnerData = { name: winnerName, votes: Number(winnerVotes) };
+          setWinner(winnerData);
+        }
+
+        if (userAddress) {
+          checkVotingStatus(electionId, userAddress);
+        }
       }
     } catch (error) {
-      console.error('Error fetching from contract:', error);
+      console.error('Error fetching election details:', error);
       toast({
-        title: "Connection Error",
-        description: "Unable to connect to the election contract. Please check your wallet connection.",
-        variant: "destructive"
+        title: t('common.error'),
+        description: 'Failed to load election details',
+        variant: 'destructive'
       });
+    } finally {
+      setLoadingElection(false);
     }
   };
 
@@ -182,7 +163,6 @@ const Vote = () => {
         if (accounts.length > 0) {
           setConnected(true);
           setUserAddress(accounts[0].address);
-          checkVotingStatus(accounts[0].address);
         }
       }
     } catch (error) {
@@ -218,12 +198,11 @@ const Vote = () => {
     }
   };
 
-  const checkVotingStatus = async (address) => {
+  const checkVotingStatus = async (electionId, address) => {
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-      const voted = await contract.hasVoted(address);
-      setHasVoted(voted);
+      const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
+      setHasVoted(false);
     } catch (error) {
       console.error('Error checking voting status:', error);
     }
@@ -240,35 +219,24 @@ const Vote = () => {
       );
       
       if (candidate) {
-        handleVote(candidate.index);
+        handleVote(candidate.id);
       } else {
         speak(t('voting.candidateNotFound', { name: candidateName }));
       }
-    } else if (command === 'SHOW_RESULTS') {
-      window.location.href = '/admin';
     } else if (command === 'CONNECT_WALLET') {
       connectWallet();
     }
   };
 
-  const handleVote = async (candidateIndex) => {
-    if (!voterName.trim()) {
-      toast({
-        title: t('voting.enterName'),
-        description: t('voting.enterName'),
-        variant: "destructive"
-      });
-      return;
-    }
-
+  const handleVote = async (candidateId) => {
     try {
       setVoting(true);
       
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+      const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, signer);
 
-      const tx = await contract.vote(candidateIndex, voterName);
+      const tx = await contract.vote(selectedElectionId, candidateId);
       toast({
         title: "Transaction Submitted",
         description: "Your vote is being processed...",
@@ -280,9 +248,11 @@ const Vote = () => {
       setHasVoted(true);
       toast({
         title: "Vote Successful!",
-        description: `Your vote for ${candidates[candidateIndex]?.name} has been recorded`,
+        description: `Your vote has been recorded`,
         variant: "default"
       });
+
+      fetchElectionDetails(selectedElectionId);
     } catch (error) {
       console.error('Error voting:', error);
       toast({
@@ -295,24 +265,34 @@ const Vote = () => {
     }
   };
 
-  const getProgress = () => {
-    if (!status || status.timeLeftSeconds <= 0) return 0;
-    const totalTime = status.electionEndTime - (status.electionEndTime - status.timeLeftSeconds);
-    return Math.max(0, Math.min(100, ((totalTime - status.timeLeftSeconds) / totalTime) * 100));
+  const getElectionStatus = (election) => {
+    const now = Math.floor(Date.now() / 1000);
+    if (!election.active) return 'ended';
+    if (now < election.startTime) return 'upcoming';
+    if (now > election.endTime) return 'expired';
+    return 'active';
+  };
+
+  const formatDate = (timestamp) => {
+    return new Date(timestamp * 1000).toLocaleString();
+  };
+
+  const handleElectionSelect = async (electionId) => {
+    setSelectedElectionId(electionId);
+    await fetchElectionDetails(electionId);
+  };
+
+  const handleBackToList = () => {
+    setSelectedElectionId(null);
+    setSelectedElection(null);
+    setCandidates([]);
+    setWinner(null);
+    setHasVoted(false);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background/50 to-primary/5 relative overflow-hidden">
-      {/* Blockchain-themed background elements */}
-      <div className="absolute inset-0 opacity-5">
-        <div className="absolute top-10 left-10 w-32 h-32 border border-primary/20 rounded-lg rotate-12"></div>
-        <div className="absolute bottom-20 right-20 w-24 h-24 border border-accent/20 rounded-lg -rotate-12"></div>
-        <div className="absolute top-1/2 left-1/4 w-16 h-16 border border-primary-glow/20 rounded-lg rotate-45"></div>
-      </div>
-      
-      <div className="container mx-auto px-4 py-8 relative z-10">
-        {/* Enhanced Header */}
-        {/* Language and Voice Controls Header */}
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <LanguageSelector />
           <VoiceControls onVoiceCommand={handleVoiceCommand} compact={true} />
@@ -333,58 +313,8 @@ const Vote = () => {
           <p className="text-xl text-muted-foreground mb-4">
             {t('voting.subtitle')}
           </p>
-          <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Globe className="w-4 h-4 text-accent" />
-              <span>Avalanche C-Chain</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-success" />
-              <span>Real-time Results</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Shield className="w-4 h-4 text-primary" />
-              <span>Blockchain Verified</span>
-            </div>
-          </div>
-          
-          {/* Enhanced Election Status */}
-          <Card className="max-w-3xl mx-auto mt-8 p-8 bg-gradient-to-r from-card/80 to-card/60 backdrop-blur-md border-primary/20 shadow-elegant">
-            <div className="flex items-center justify-center gap-6 mb-6">
-              <Clock className="w-8 h-8 text-primary animate-pulse" />
-              <div className="text-center">
-                {status?.electionActive ? (
-                  <>
-                    <Badge className="bg-gradient-to-r from-success to-success/80 text-success-foreground mb-3 px-4 py-2 text-lg">
-                      🗳️ Election Active
-                    </Badge>
-                    <p className="text-2xl font-bold text-foreground bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                      {timeLeft}
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-2">Time remaining to cast your vote</p>
-                  </>
-                ) : (
-                  <>
-                    <Badge variant="destructive" className="mb-3 px-4 py-2 text-lg">
-                      ⏰ Election Ended
-                    </Badge>
-                    <p className="text-lg text-muted-foreground">Results are being finalized</p>
-                  </>
-                )}
-              </div>
-            </div>
-            {status?.electionActive && (
-              <div className="space-y-2">
-                <Progress value={getProgress()} className="w-full h-3 bg-muted" />
-                <p className="text-xs text-center text-muted-foreground">
-                  Election Progress • Contract: {CONTRACT_ADDRESS.slice(0, 6)}...{CONTRACT_ADDRESS.slice(-4)}
-                </p>
-              </div>
-            )}
-          </Card>
         </div>
 
-        {/* Enhanced Wallet Connection */}
         {!connected ? (
           <Card className="max-w-md mx-auto p-8 text-center bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-md border-accent/20 shadow-elegant">
             <div className="p-4 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
@@ -400,121 +330,226 @@ const Vote = () => {
               <Wallet className="w-5 h-5 mr-2" />
               Connect Wallet
             </Button>
-            <p className="text-xs text-muted-foreground mt-4">
-              Supports MetaMask, Core Wallet, and other Web3 wallets
-            </p>
           </Card>
-        ) : hasVoted ? (
-          <Card className="max-w-md mx-auto p-8 text-center bg-gradient-to-br from-success/10 to-success/5 border-success/30 backdrop-blur-md shadow-glow">
-            <div className="p-4 bg-gradient-to-br from-success/20 to-success/30 rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
-              <CheckCircle className="w-12 h-12 text-success" />
-            </div>
-            <h3 className="text-2xl font-semibold mb-4 text-success">Vote Recorded!</h3>
-            <p className="text-muted-foreground mb-4">
-              Your vote has been permanently recorded on the Avalanche blockchain
-            </p>
-            <div className="p-4 bg-muted/50 rounded-lg">
-              <p className="text-sm text-muted-foreground">
-                Transaction Hash: <br />
-                <span className="font-mono text-xs">{userAddress.slice(0, 20)}...</span>
-              </p>
-            </div>
-          </Card>
-        ) : status?.electionActive ? (
-          <div className="max-w-5xl mx-auto">
-            {/* Enhanced Voter Input */}
-            <Card className="p-8 mb-8 bg-gradient-to-r from-card/90 to-card/70 backdrop-blur-md border-primary/20 shadow-elegant">
-              <h3 className="text-2xl font-semibold mb-6 flex items-center gap-3">
-                <div className="p-2 bg-gradient-to-br from-primary/20 to-accent/20 rounded-lg">
-                  <VoteIcon className="w-6 h-6 text-primary" />
-                </div>
-                Voter Information
-              </h3>
-              <div className="flex flex-col md:flex-row gap-4 items-end">
-                <div className="flex-1">
-                  <label className="text-sm font-medium text-muted-foreground mb-2 block">
-                    Full Name (Recorded on blockchain)
-                  </label>
-                  <Input
-                    placeholder="Enter your full name"
-                    value={voterName}
-                    onChange={(e) => setVoterName(e.target.value)}
-                    className="h-12 bg-background/50 border-primary/20 focus:border-primary"
-                  />
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  <p>Wallet: {userAddress.slice(0, 6)}...{userAddress.slice(-4)}</p>
-                </div>
-              </div>
-            </Card>
+        ) : !selectedElectionId ? (
+          <div className="space-y-6">
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              Active Elections
+            </h2>
 
-            {/* Enhanced Candidates Grid */}
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {candidates.map((candidate) => (
-                <Card key={candidate.index} className="group p-8 hover:shadow-glow transition-all duration-500 bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-md border-primary/20 hover:border-accent/40 hover:scale-105">
-                  <div className="text-center">
-                    <div className="relative mb-6">
-                      <div className="w-32 h-32 bg-gradient-to-br from-primary via-primary-glow to-accent rounded-full mx-auto flex items-center justify-center shadow-elegant group-hover:shadow-glow transition-all duration-500">
-                        <span className="text-4xl font-bold text-primary-foreground">
-                          {candidate.name.split(' ').map(n => n[0]).join('')}
-                        </span>
-                      </div>
-                      <div className="absolute -bottom-2 -right-2 p-2 bg-accent rounded-full border-4 border-background">
-                        <Shield className="w-4 h-4 text-accent-foreground" />
-                      </div>
+            {loading && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(3)].map((_, i) => (
+                  <Card key={i} className="p-6">
+                    <div className="space-y-4">
+                      <div className="h-6 bg-muted rounded-md w-3/4 animate-pulse"></div>
+                      <div className="h-4 bg-muted rounded w-full animate-pulse"></div>
+                      <div className="h-4 bg-muted rounded w-2/3 animate-pulse"></div>
                     </div>
-                    <h3 className="text-2xl font-semibold mb-6 bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
-                      {candidate.name}
-                    </h3>
-                    <Button
-                      onClick={() => handleVote(candidate.index)}
-                      disabled={voting}
-                      className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 transition-all duration-300 shadow-lg hover:shadow-glow"
-                      size="lg"
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {!loading && elections.length === 0 && (
+              <Card className="p-12 text-center">
+                <VoteIcon className="w-12 h-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                <p className="text-lg text-muted-foreground">No elections available</p>
+              </Card>
+            )}
+
+            {!loading && elections.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {elections.map((election) => {
+                  const status = getElectionStatus(election);
+                  return (
+                    <Card
+                      key={election.id}
+                      className="p-6 cursor-pointer transition-all duration-300 hover:shadow-lg border-2 hover:border-primary/30"
+                      onClick={() => handleElectionSelect(election.id)}
                     >
-                      <VoteIcon className="w-5 h-5 mr-3" />
-                      {voting ? 'Processing Vote...' : 'Cast Vote'}
-                    </Button>
-                    <p className="text-xs text-muted-foreground mt-3">
-                      Candidate #{candidate.index + 1}
-                    </p>
-                  </div>
-                </Card>
-              ))}
-            </div>
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-start">
+                          <h3 className="text-xl font-semibold truncate">{election.title}</h3>
+                          <Badge variant={
+                            status === 'active' ? 'default' :
+                            status === 'upcoming' ? 'secondary' :
+                            status === 'ended' ? 'outline' : 'destructive'
+                          }>
+                            {status === 'active' && <><CheckCircle className="w-3 h-3 mr-1" /> Active</>}
+                            {status === 'upcoming' && <><Clock className="w-3 h-3 mr-1" /> Upcoming</>}
+                            {status === 'ended' && <><AlertCircle className="w-3 h-3 mr-1" /> Ended</>}
+                            {status === 'expired' && <><AlertCircle className="w-3 h-3 mr-1" /> Expired</>}
+                          </Badge>
+                        </div>
+                        
+                        <p className="text-muted-foreground text-sm line-clamp-2">
+                          {election.description}
+                        </p>
+                        
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Calendar className="w-4 h-4" />
+                            <span>{formatDate(election.startTime)}</span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-1">
+                              <Users className="w-4 h-4" />
+                              <span>{election.candidatesCount} Candidates</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <BarChart3 className="w-4 h-4" />
+                              <span>{election.totalVotes} Votes</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
           </div>
         ) : (
-          <Card className="max-w-md mx-auto p-8 text-center bg-gradient-to-br from-muted/50 to-muted/30 backdrop-blur-md">
-            <div className="p-4 bg-muted rounded-full w-24 h-24 mx-auto mb-6 flex items-center justify-center">
-              <Clock className="w-12 h-12 text-muted-foreground" />
-            </div>
-            <h3 className="text-2xl font-semibold mb-4">Election Concluded</h3>
-            <p className="text-muted-foreground mb-6">
-              The voting period has ended. Results are being finalized on the blockchain.
-            </p>
-            <Button variant="outline" className="w-full" onClick={() => window.location.href = '/admin'}>
-              View Results
+          <div className="space-y-6">
+            <Button 
+              variant="outline" 
+              onClick={handleBackToList}
+              className="border-primary/20"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Elections
             </Button>
-          </Card>
-        )}
 
-        {/* Blockchain Info Footer */}
-        <div className="mt-16 text-center">
-          <div className="flex items-center justify-center gap-8 text-xs text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-success rounded-full animate-pulse"></div>
-              <span>Live on Avalanche</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-primary rounded-full"></div>
-              <span>Fuji Testnet</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-accent rounded-full"></div>
-              <span>Powered by Web3</span>
-            </div>
+            {loadingElection ? (
+              <Card className="p-12">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+                  <p className="mt-4 text-muted-foreground">Loading election...</p>
+                </div>
+              </Card>
+            ) : selectedElection ? (
+              <>
+                <Card className="p-8 bg-gradient-to-br from-card/90 to-card/70 backdrop-blur-xl border-primary/30">
+                  <div className="text-center mb-6">
+                    <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                      {selectedElection.title}
+                    </h1>
+                    <p className="text-muted-foreground text-lg">{selectedElection.description}</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="text-center p-4 bg-primary/10 rounded-lg">
+                      <CheckCircle className="w-6 h-6 mx-auto mb-2 text-primary" />
+                      <p className="text-sm text-muted-foreground">Status</p>
+                      <Badge variant={selectedElection.active ? 'default' : 'outline'}>
+                        {selectedElection.active ? 'Active' : 'Ended'}
+                      </Badge>
+                    </div>
+                    <div className="text-center p-4 bg-accent/10 rounded-lg">
+                      <Users className="w-6 h-6 mx-auto mb-2 text-accent" />
+                      <p className="text-sm text-muted-foreground">Candidates</p>
+                      <p className="font-semibold">{selectedElection.candidatesCount}</p>
+                    </div>
+                    <div className="text-center p-4 bg-success/10 rounded-lg">
+                      <BarChart3 className="w-6 h-6 mx-auto mb-2 text-success" />
+                      <p className="text-sm text-muted-foreground">Total Votes</p>
+                      <p className="font-semibold">{selectedElection.totalVotes}</p>
+                    </div>
+                    <div className="text-center p-4 bg-primary-glow/10 rounded-lg">
+                      <CheckCircle className="w-6 h-6 mx-auto mb-2 text-primary-glow" />
+                      <p className="text-sm text-muted-foreground">Winner</p>
+                      <p className="font-semibold">{winner ? winner.name : '-'}</p>
+                    </div>
+                  </div>
+                </Card>
+
+                {hasVoted ? (
+                  <Card className="p-8 text-center bg-gradient-to-br from-success/10 to-success/5 border-success/30">
+                    <CheckCircle className="w-12 h-12 mx-auto mb-4 text-success" />
+                    <h3 className="text-2xl font-semibold mb-2 text-success">Vote Recorded!</h3>
+                    <p className="text-muted-foreground">Your vote has been permanently recorded on the blockchain</p>
+                  </Card>
+                ) : selectedElection.active ? (
+                  <Card className="p-6">
+                    <h3 className="text-2xl font-bold mb-6 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                      Cast Your Vote
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {candidates.map((candidate) => (
+                        <Card 
+                          key={candidate.id}
+                          className="p-6 hover:border-primary transition-all cursor-pointer"
+                          onClick={() => handleVote(candidate.id)}
+                        >
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <h4 className="font-semibold text-lg">{candidate.name}</h4>
+                              <p className="text-sm text-muted-foreground">Click to vote</p>
+                            </div>
+                            <VoteIcon className="w-6 h-6 text-primary" />
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </Card>
+                ) : (
+                  <Card className="p-8 text-center">
+                    <Clock className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                    <p className="text-lg text-muted-foreground">This election has ended</p>
+                  </Card>
+                )}
+
+                <Card className="p-6">
+                  <h3 className="text-2xl font-bold mb-6 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                    Results
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {candidates.map((candidate) => {
+                      const percentage = selectedElection.totalVotes > 0 
+                        ? (candidate.votes / selectedElection.totalVotes) * 100 
+                        : 0;
+                      const isWinner = winner && winner.name === candidate.name;
+
+                      return (
+                        <Card 
+                          key={candidate.id} 
+                          className={`p-6 ${isWinner ? 'border-2 border-primary bg-primary/5' : ''}`}
+                        >
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <h4 className="font-semibold text-lg flex items-center gap-2">
+                                {candidate.name}
+                                {isWinner && <Badge className="bg-gradient-to-r from-primary to-accent">Winner</Badge>}
+                              </h4>
+                              <p className="text-sm text-muted-foreground">
+                                {candidate.votes} votes ({percentage.toFixed(1)}%)
+                              </p>
+                            </div>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-3">
+                            <div
+                              className="bg-gradient-to-r from-primary to-accent h-3 rounded-full transition-all duration-500"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </Card>
+
+                {selectedElection.totalVotes > 0 && (
+                  <AIInsights 
+                    election={selectedElection}
+                    candidates={candidates}
+                    winner={winner}
+                  />
+                )}
+              </>
+            ) : null}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
