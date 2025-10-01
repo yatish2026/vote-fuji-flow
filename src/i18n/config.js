@@ -20,8 +20,8 @@ const resources = {
   bn: { translation: bn },
 };
 
-// Initialize i18n
-i18n
+// Initialize i18n and export the promise
+const initPromise = i18n
   .use(initReactI18next)
   .init({
     resources,
@@ -36,4 +36,5 @@ i18n
     },
   });
 
+export { initPromise };
 export default i18n;
