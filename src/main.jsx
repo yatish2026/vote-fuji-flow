@@ -1,10 +1,13 @@
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import { i18nInitPromise } from './i18n/config'
 
-// Wait for i18n to initialize before rendering
-i18nInitPromise.then(() => {
-  import('./App').then((AppModule) => {
-    createRoot(document.getElementById("root")).render(<AppModule.default />);
-  });
-});
+// Ensure i18n is initialized before rendering
+async function init() {
+  const { i18nInitPromise } = await import('./i18n/config');
+  await i18nInitPromise;
+  
+  const { default: App } = await import('./App');
+  createRoot(document.getElementById("root")).render(<App />);
+}
+
+init();
