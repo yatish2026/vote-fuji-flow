@@ -221,11 +221,13 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
         variant: 'default'
       });
 
-      await tx.wait();
+      const receipt = await tx.wait();
+      
+      console.log('Election created successfully!', receipt);
 
       toast({
         title: 'Success!',
-        description: 'Election created successfully',
+        description: 'Election created successfully and will appear shortly',
         variant: 'default'
       });
 
@@ -238,11 +240,13 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
         endTime: ''
       });
       
-      // Clear cache and refetch
+      // Clear cache and refetch immediately
       localStorage.removeItem('elections-cache');
-      setTimeout(() => {
-        fetchElections();
-      }, 1000);
+      
+      // Refetch elections multiple times to ensure we catch the new election
+      await fetchElections();
+      setTimeout(() => fetchElections(), 2000);
+      setTimeout(() => fetchElections(), 4000);
     } catch (error) {
       console.error('Error creating election:', error);
       let errorMessage = 'Failed to create election';
