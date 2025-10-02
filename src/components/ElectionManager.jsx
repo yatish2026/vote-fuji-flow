@@ -17,6 +17,8 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
   const [elections, setElections] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [walletConnected, setWalletConnected] = useState(false);
+  const [currentNetwork, setCurrentNetwork] = useState('');
   const [newElection, setNewElection] = useState({
     title: '',
     description: '',
@@ -26,10 +28,68 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
   });
 
   useEffect(() => {
+    checkWalletConnection();
     // Load cached data immediately, then fetch fresh data
     loadCachedElections();
     fetchElections();
   }, []);
+
+  const checkWalletConnection = async () => {
+    if (!window.ethereum) {
+      setWalletConnected(false);
+      toast({
+        title: 'Wallet Not Found',
+        description: 'Please install MetaMask or Core Wallet to use this feature',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+      setWalletConnected(accounts.length > 0);
+      
+      if (accounts.length > 0) {
+        const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+        setCurrentNetwork(chainId);
+      }
+    } catch (error) {
+      console.error('Error checking wallet:', error);
+      setWalletConnected(false);
+    }
+  };
+
+  const connectWallet = async () => {
+    try {
+      if (!window.ethereum) {
+        toast({
+          title: 'Wallet Not Found',
+          description: 'Please install MetaMask or Core Wallet',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      await checkWalletConnection();
+      
+      toast({
+        title: 'Wallet Connected',
+        description: 'You can now create elections',
+        variant: 'default'
+      });
+
+      // Fetch elections after connecting
+      fetchElections();
+    } catch (error) {
+      console.error('Error connecting wallet:', error);
+      toast({
+        title: 'Connection Failed',
+        description: error.message || 'Failed to connect wallet',
+        variant: 'destructive'
+      });
+    }
+  };
 
   const loadCachedElections = () => {
     try {
@@ -61,6 +121,7 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
         const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
 
         const electionCount = await contract.electionCount();
+        console.log('Election count:', Number(electionCount));
 
         // Use batch requests for maximum speed
         const batchSize = 10;
@@ -111,11 +172,19 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
         }
       } catch (error) {
         console.error('Contract error:', error);
+        
+        let errorMsg = 'Unable to load elections. ';
+        if (error.code === 'BAD_DATA' || error.message?.includes('could not decode')) {
+          errorMsg += 'Please make sure you are connected to the correct blockchain network (Core Testnet) and your wallet is properly connected.';
+        } else {
+          errorMsg += 'Please check your wallet connection and network.';
+        }
+        
         // Don't show error if we have cached data
         if (elections.length === 0) {
           toast({
             title: t('common.error'),
-            description: 'Unable to load elections. Please check your connection.',
+            description: errorMsg,
             variant: 'destructive'
           });
         }
@@ -346,14 +415,27 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
             {t('elections.title')}
           </h2>
           <p className="text-muted-foreground mt-2">{t('elections.subtitle')}</p>
+          {walletConnected && currentNetwork && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Network: {currentNetwork === '0x45c' ? 'Core Testnet' : currentNetwork}
+            </p>
+          )}
         </div>
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogTrigger asChild>
-            <Button className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90">
-              <Plus className="w-4 h-4 mr-2" />
-              {t('elections.createElection')}
-            </Button>
-          </DialogTrigger>
+        {!walletConnected ? (
+          <Button 
+            onClick={connectWallet}
+            className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
+          >
+            Connect Wallet
+          </Button>
+        ) : (
+          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+            <DialogTrigger asChild>
+              <Button className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90">
+                <Plus className="w-4 h-4 mr-2" />
+                {t('elections.createElection')}
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>{t('elections.createNewElection')}</DialogTitle>
@@ -436,6 +518,7 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
             </div>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {loading && (
