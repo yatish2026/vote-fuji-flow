@@ -429,17 +429,16 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
             Connect Wallet
           </Button>
         ) : (
-          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-            <DialogTrigger asChild>
-              <Button 
-                onClick={() => setShowCreateDialog(true)}
-                className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                {t('elections.createElection')}
-              </Button>
-            </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <>
+            <Button 
+              onClick={() => setShowCreateDialog(true)}
+              className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              {t('elections.createElection')}
+            </Button>
+            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+              <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>{t('elections.createNewElection')}</DialogTitle>
             </DialogHeader>
@@ -519,8 +518,9 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
                 {t('elections.createElection')}
               </Button>
             </div>
-          </DialogContent>
-        </Dialog>
+              </DialogContent>
+            </Dialog>
+          </>
         )}
       </div>
 
