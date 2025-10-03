@@ -431,17 +431,23 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
         ) : (
           <>
             <Button 
-              onClick={() => setShowCreateDialog(true)}
+              onClick={() => {
+                console.log('Create Election button clicked, opening dialog...');
+                setShowCreateDialog(true);
+              }}
               className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
             >
               <Plus className="w-4 h-4 mr-2" />
               {t('elections.createElection')}
             </Button>
-            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-              <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{t('elections.createNewElection')}</DialogTitle>
-            </DialogHeader>
+            <Dialog open={showCreateDialog} onOpenChange={(open) => {
+              console.log('Dialog state changing to:', open);
+              setShowCreateDialog(open);
+            }}>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto z-[100]">
+                <DialogHeader>
+                  <DialogTitle>{t('elections.createNewElection')}</DialogTitle>
+                </DialogHeader>
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-medium">{t('elections.electionTitle')}</label>
