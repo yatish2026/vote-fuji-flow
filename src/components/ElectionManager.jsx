@@ -431,7 +431,10 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
         ) : (
           <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
             <DialogTrigger asChild>
-              <Button className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90">
+              <Button 
+                onClick={() => setShowCreateDialog(true)}
+                className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 {t('elections.createElection')}
               </Button>
