@@ -1,12 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Calendar, Users, BarChart3, Clock, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
+import { Calendar, Users, BarChart3, Clock, CheckCircle, AlertCircle, Trash2 } from 'lucide-react';
 import { ethers } from 'ethers';
 import { FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI } from '@/lib/contract';
 import { useTranslation } from 'react-i18next';
@@ -16,16 +13,8 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
   const { toast } = useToast();
   const [elections, setElections] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [walletConnected, setWalletConnected] = useState(false);
   const [currentNetwork, setCurrentNetwork] = useState('');
-  const [newElection, setNewElection] = useState({
-    title: '',
-    description: '',
-    candidates: ['', ''],
-    startTime: '',
-    endTime: ''
-  });
 
   useEffect(() => {
     checkWalletConnection();
@@ -75,7 +64,7 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
       
       toast({
         title: 'Wallet Connected',
-        description: 'You can now create elections',
+        description: 'Wallet connected successfully',
         variant: 'default'
       });
 
@@ -196,9 +185,9 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
     }
   };
 
-  const createElection = async () => {
+  // Contract function for creating elections - kept for reference
+  const createElection = async (electionData) => {
     try {
-      // Check wallet connection first
       if (!window.ethereum) {
         toast({
           title: t('common.error'),
@@ -208,67 +197,12 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
         return;
       }
 
-      // Validate form inputs
-      if (!newElection.title.trim() || !newElection.description.trim()) {
-        toast({
-          title: t('common.error'),
-          description: 'Please fill in all required fields',
-          variant: 'destructive'
-        });
-        return;
-      }
-
-      const validCandidates = newElection.candidates.filter(c => c.trim());
-      if (validCandidates.length < 2) {
-        toast({
-          title: t('common.error'),
-          description: 'Please add at least 2 candidates',
-          variant: 'destructive'
-        });
-        return;
-      }
-
-      if (!newElection.startTime || !newElection.endTime) {
-        toast({
-          title: t('common.error'),
-          description: 'Please set start and end times',
-          variant: 'destructive'
-        });
-        return;
-      }
-
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, signer);
 
-      const startTimestamp = Math.floor(new Date(newElection.startTime).getTime() / 1000);
-      const endTimestamp = Math.floor(new Date(newElection.endTime).getTime() / 1000);
-
-      if (startTimestamp <= Math.floor(Date.now() / 1000)) {
-        toast({
-          title: t('common.error'),
-          description: 'Start time must be in the future',
-          variant: 'destructive'
-        });
-        return;
-      }
-
-      if (endTimestamp <= startTimestamp) {
-        toast({
-          title: t('common.error'),
-          description: 'End time must be after start time',
-          variant: 'destructive'
-        });
-        return;
-      }
-
-      console.log('Creating election with:', {
-        title: newElection.title,
-        description: newElection.description,
-        candidates: validCandidates,
-        startTime: startTimestamp,
-        endTime: endTimestamp
-      });
+      const startTimestamp = Math.floor(new Date(electionData.startTime).getTime() / 1000);
+      const endTimestamp = Math.floor(new Date(electionData.endTime).getTime() / 1000);
 
       toast({
         title: 'Processing',
@@ -277,9 +211,9 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
       });
 
       const tx = await contract.createElection(
-        newElection.title,
-        newElection.description,
-        validCandidates,
+        electionData.title,
+        electionData.description,
+        electionData.candidates,
         startTimestamp,
         endTimestamp
       );
@@ -296,23 +230,11 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
 
       toast({
         title: 'Success!',
-        description: 'Election created successfully and will appear shortly',
+        description: 'Election created successfully',
         variant: 'default'
       });
-
-      setShowCreateDialog(false);
-      setNewElection({
-        title: '',
-        description: '',
-        candidates: ['', ''],
-        startTime: '',
-        endTime: ''
-      });
       
-      // Clear cache and refetch immediately
       localStorage.removeItem('elections-cache');
-      
-      // Refetch elections multiple times to ensure we catch the new election
       await fetchElections();
       setTimeout(() => fetchElections(), 2000);
       setTimeout(() => fetchElections(), 4000);
@@ -332,29 +254,6 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
         variant: 'destructive'
       });
     }
-  };
-
-  const addCandidateField = () => {
-    setNewElection(prev => ({
-      ...prev,
-      candidates: [...prev.candidates, '']
-    }));
-  };
-
-  const removeCandidateField = (index) => {
-    if (newElection.candidates.length > 2) {
-      setNewElection(prev => ({
-        ...prev,
-        candidates: prev.candidates.filter((_, i) => i !== index)
-      }));
-    }
-  };
-
-  const updateCandidate = (index, value) => {
-    setNewElection(prev => ({
-      ...prev,
-      candidates: prev.candidates.map((c, i) => i === index ? value : c)
-    }));
   };
 
   const deleteElection = async (electionId, electionTitle) => {
@@ -421,112 +320,13 @@ const ElectionManager = ({ onElectionSelect, selectedElectionId, onElectionDelet
             </p>
           )}
         </div>
-        {!walletConnected ? (
+        {!walletConnected && (
           <Button 
             onClick={connectWallet}
             className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
           >
             Connect Wallet
           </Button>
-        ) : (
-          <>
-            <Button 
-              onClick={() => {
-                console.log('Create Election button clicked, opening dialog...');
-                setShowCreateDialog(true);
-              }}
-              className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              {t('elections.createElection')}
-            </Button>
-            <Dialog open={showCreateDialog} onOpenChange={(open) => {
-              console.log('Dialog state changing to:', open);
-              setShowCreateDialog(open);
-            }}>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto z-[100]">
-                <DialogHeader>
-                  <DialogTitle>{t('elections.createNewElection')}</DialogTitle>
-                </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">{t('elections.electionTitle')}</label>
-                <Input
-                  value={newElection.title}
-                  onChange={(e) => setNewElection(prev => ({ ...prev, title: e.target.value }))}
-                  placeholder={t('elections.titlePlaceholder')}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">{t('elections.electionDescription')}</label>
-                <Textarea
-                  value={newElection.description}
-                  onChange={(e) => setNewElection(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder={t('elections.descriptionPlaceholder')}
-                  rows={3}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">{t('elections.candidates')}</label>
-                {newElection.candidates.map((candidate, index) => (
-                  <div key={index} className="flex gap-2 mt-2">
-                    <Input
-                      value={candidate}
-                      onChange={(e) => updateCandidate(index, e.target.value)}
-                      placeholder={`${t('elections.candidate')} ${index + 1}`}
-                    />
-                    {newElection.candidates.length > 2 && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeCandidateField(index)}
-                      >
-                        -
-                      </Button>
-                    )}
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={addCandidateField}
-                  className="mt-2"
-                >
-                  <Plus className="w-3 h-3 mr-1" />
-                  {t('elections.addCandidate')}
-                </Button>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">{t('elections.startTime')}</label>
-                  <Input
-                    type="datetime-local"
-                    value={newElection.startTime}
-                    onChange={(e) => setNewElection(prev => ({ ...prev, startTime: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">{t('elections.endTime')}</label>
-                  <Input
-                    type="datetime-local"
-                    value={newElection.endTime}
-                    onChange={(e) => setNewElection(prev => ({ ...prev, endTime: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <Button 
-                onClick={createElection} 
-                className="w-full bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
-                type="button"
-              >
-                {t('elections.createElection')}
-              </Button>
-            </div>
-              </DialogContent>
-            </Dialog>
-          </>
         )}
       </div>
 
