@@ -7,44 +7,57 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('=== Realtime Voice Function Called ===');
+  console.log('Method:', req.method);
+  console.log('Headers:', Object.fromEntries(req.headers.entries()));
+  
   if (req.method === 'OPTIONS') {
+    console.log('Handling CORS preflight');
     return new Response('ok', { headers: corsHeaders });
   }
 
   const upgrade = req.headers.get('upgrade') || '';
+  console.log('Upgrade header:', upgrade);
+  
   if (upgrade.toLowerCase() !== 'websocket') {
+    console.log('Not a WebSocket request');
     return new Response('Expected websocket', { status: 426, headers: corsHeaders });
   }
 
-  const { socket: clientSocket, response } = Deno.upgradeWebSocket(req);
+  try {
+    console.log('Upgrading to WebSocket...');
+    const { socket: clientSocket, response } = Deno.upgradeWebSocket(req);
+    console.log('WebSocket upgrade successful');
 
-  let openaiWs: WebSocket | null = null;
-  
-  clientSocket.onopen = async () => {
-    console.log('Client connected');
+    let openaiWs: WebSocket | null = null;
     
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
-      clientSocket.send(JSON.stringify({ 
-        type: 'error', 
-        error: 'OPENAI_API_KEY not configured' 
-      }));
-      clientSocket.close();
-      return;
-    }
+    clientSocket.onopen = async () => {
+      console.log('✅ Client WebSocket connected');
+      
+      const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+      if (!OPENAI_API_KEY) {
+        console.error('❌ OPENAI_API_KEY not configured');
+        clientSocket.send(JSON.stringify({ 
+          type: 'error', 
+          error: 'OPENAI_API_KEY not configured' 
+        }));
+        clientSocket.close();
+        return;
+      }
 
-    try {
-      const url = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01';
-      openaiWs = new WebSocket(url, {
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'OpenAI-Beta': 'realtime=v1'
-        }
-      });
+      try {
+        const url = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01';
+        console.log('Connecting to OpenAI at:', url);
+        openaiWs = new WebSocket(url, {
+          headers: {
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
+            'OpenAI-Beta': 'realtime=v1'
+          }
+        });
 
-      openaiWs.onopen = () => {
-        console.log('Connected to OpenAI');
-      };
+        openaiWs.onopen = () => {
+          console.log('✅ Connected to OpenAI');
+        };
 
       openaiWs.onmessage = (event) => {
         try {
@@ -197,35 +210,42 @@ Always be conversational, clear, and confirm important actions before executing 
         clientSocket.close();
       };
 
-    } catch (error) {
-      console.error('Error connecting to OpenAI:', error);
-      clientSocket.send(JSON.stringify({ 
-        type: 'error', 
-        error: error.message 
-      }));
-      clientSocket.close();
-    }
-  };
-
-  clientSocket.onmessage = (event) => {
-    try {
-      if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
-        openaiWs.send(event.data);
+      } catch (error) {
+        console.error('❌ Error connecting to OpenAI:', error);
+        clientSocket.send(JSON.stringify({ 
+          type: 'error', 
+          error: error.message 
+        }));
+        clientSocket.close();
       }
-    } catch (error) {
-      console.error('Error forwarding to OpenAI:', error);
-    }
-  };
+    };
 
-  clientSocket.onclose = () => {
-    console.log('Client disconnected');
-    openaiWs?.close();
-  };
+    clientSocket.onmessage = (event) => {
+      try {
+        if (openaiWs && openaiWs.readyState === WebSocket.OPEN) {
+          openaiWs.send(event.data);
+        }
+      } catch (error) {
+        console.error('❌ Error forwarding to OpenAI:', error);
+      }
+    };
 
-  clientSocket.onerror = (error) => {
-    console.error('Client socket error:', error);
-    openaiWs?.close();
-  };
+    clientSocket.onclose = () => {
+      console.log('❌ Client disconnected');
+      openaiWs?.close();
+    };
 
-  return response;
+    clientSocket.onerror = (error) => {
+      console.error('❌ Client socket error:', error);
+      openaiWs?.close();
+    };
+
+    return response;
+  } catch (error) {
+    console.error('❌ WebSocket upgrade error:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
 });

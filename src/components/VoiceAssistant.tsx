@@ -280,8 +280,21 @@ const VoiceAssistant = ({ className = '' }: VoiceAssistantProps) => {
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
+      let connectionTimeout = setTimeout(() => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          console.error('Connection timeout');
+          ws.close();
+          toast({
+            title: 'Connection Timeout',
+            description: 'Unable to connect to voice service. Please try again.'
+          });
+          setIsConnecting(false);
+        }
+      }, 10000);
+
       ws.onopen = async () => {
         console.log('WebSocket connected');
+        clearTimeout(connectionTimeout);
         setIsConnected(true);
         setIsConnecting(false);
         
