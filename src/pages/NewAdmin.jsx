@@ -3,9 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Wallet, BarChart3, Users, CheckCircle, AlertCircle, ArrowLeft, LogOut, Loader2 } from 'lucide-react';
+import { Wallet, BarChart3, Users, CheckCircle, AlertCircle, ArrowLeft, LogOut, Loader2, Plus, X } from 'lucide-react';
 import { ethers } from 'ethers';
 import ElectionManager from '@/components/ElectionManager';
 import AIInsights from '@/components/AIInsights';
@@ -27,6 +30,14 @@ const NewAdmin = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newElection, setNewElection] = useState({
+    title: '',
+    description: '',
+    candidates: ['', ''],
+    startTime: '',
+    endTime: ''
+  });
 
   useEffect(() => {
     checkAuth();
@@ -253,6 +264,142 @@ const NewAdmin = () => {
     setWinner(null);
   };
 
+  const addCandidateField = () => {
+    setNewElection(prev => ({
+      ...prev,
+      candidates: [...prev.candidates, '']
+    }));
+  };
+
+  const removeCandidateField = (index) => {
+    if (newElection.candidates.length > 2) {
+      setNewElection(prev => ({
+        ...prev,
+        candidates: prev.candidates.filter((_, i) => i !== index)
+      }));
+    }
+  };
+
+  const updateCandidate = (index, value) => {
+    setNewElection(prev => ({
+      ...prev,
+      candidates: prev.candidates.map((c, i) => i === index ? value : c)
+    }));
+  };
+
+  const createElection = async () => {
+    try {
+      if (!window.ethereum) {
+        toast({
+          title: t('common.error'),
+          description: 'Please install MetaMask or Core Wallet',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      // Validation
+      if (!newElection.title || !newElection.description) {
+        toast({
+          title: t('common.error'),
+          description: 'Please fill in election title and description',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      const validCandidates = newElection.candidates.filter(c => c.trim() !== '');
+      if (validCandidates.length < 2) {
+        toast({
+          title: t('common.error'),
+          description: 'Please add at least 2 candidates',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      if (!newElection.startTime || !newElection.endTime) {
+        toast({
+          title: t('common.error'),
+          description: 'Please set start and end time',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, signer);
+
+      const startTimestamp = Math.floor(new Date(newElection.startTime).getTime() / 1000);
+      const endTimestamp = Math.floor(new Date(newElection.endTime).getTime() / 1000);
+
+      if (endTimestamp <= startTimestamp) {
+        toast({
+          title: t('common.error'),
+          description: 'End time must be after start time',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      toast({
+        title: 'Processing',
+        description: 'Please confirm the transaction in your wallet...',
+        variant: 'default'
+      });
+
+      const tx = await contract.createElection(
+        newElection.title,
+        newElection.description,
+        validCandidates,
+        startTimestamp,
+        endTimestamp
+      );
+
+      toast({
+        title: 'Transaction Submitted',
+        description: 'Creating election on blockchain...',
+        variant: 'default'
+      });
+
+      await tx.wait();
+      
+      toast({
+        title: 'Success!',
+        description: 'Election created successfully',
+        variant: 'default'
+      });
+      
+      setShowCreateDialog(false);
+      setNewElection({
+        title: '',
+        description: '',
+        candidates: ['', ''],
+        startTime: '',
+        endTime: ''
+      });
+
+      // Refresh elections list
+      window.location.reload();
+    } catch (error) {
+      console.error('Error creating election:', error);
+      let errorMessage = 'Failed to create election';
+      
+      if (error.code === 4001) {
+        errorMessage = 'Transaction was rejected';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -369,11 +516,26 @@ const NewAdmin = () => {
       {/* Main Content */}
       <div className="container mx-auto px-4 py-8">
         {!selectedElectionId ? (
-          <ElectionManager
-            onElectionSelect={handleElectionSelect}
-            selectedElectionId={selectedElectionId}
-            onElectionDeleted={() => setSelectedElectionId(null)}
-          />
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                {t('elections.title')}
+              </h2>
+              <Button 
+                onClick={() => setShowCreateDialog(true)}
+                className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create New Election
+              </Button>
+            </div>
+            
+            <ElectionManager
+              onElectionSelect={handleElectionSelect}
+              selectedElectionId={selectedElectionId}
+              onElectionDeleted={() => setSelectedElectionId(null)}
+            />
+          </div>
         ) : (
           <div className="space-y-6">
             <Button 
@@ -490,6 +652,111 @@ const NewAdmin = () => {
           </div>
         )}
       </div>
+
+      {/* Create Election Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              Create New Election
+            </DialogTitle>
+            <DialogDescription>
+              Fill in the details to create a new election on the blockchain
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Election Name</label>
+              <Input
+                placeholder="e.g., Presidential Election 2024"
+                value={newElection.title}
+                onChange={(e) => setNewElection(prev => ({ ...prev, title: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Election Description</label>
+              <Textarea
+                placeholder="Describe the purpose and details of this election..."
+                value={newElection.description}
+                onChange={(e) => setNewElection(prev => ({ ...prev, description: e.target.value }))}
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-medium">Candidates</label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addCandidateField}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Candidate
+                </Button>
+              </div>
+              {newElection.candidates.map((candidate, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    placeholder={`Candidate ${index + 1} name`}
+                    value={candidate}
+                    onChange={(e) => updateCandidate(index, e.target.value)}
+                  />
+                  {newElection.candidates.length > 2 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeCandidateField(index)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Start Time</label>
+                <Input
+                  type="datetime-local"
+                  value={newElection.startTime}
+                  onChange={(e) => setNewElection(prev => ({ ...prev, startTime: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">End Time</label>
+                <Input
+                  type="datetime-local"
+                  value={newElection.endTime}
+                  onChange={(e) => setNewElection(prev => ({ ...prev, endTime: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowCreateDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={createElection}
+                className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
+              >
+                Create Election
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
