@@ -58,28 +58,30 @@ serve(async (req) => {
               session: {
                 modalities: ['text', 'audio'],
                 instructions: `You are a helpful voice assistant for an election voting platform. 
-                
-Your role is to help users:
-1. Create new elections by asking for: election name, description, candidate names, start time, and end time
-2. View existing elections and their details
-3. Cast votes in active elections
-4. Check election results and analytics
 
-When users want to create an election, ask for each detail one at a time:
-- First ask for the election name
-- Then the description
-- Then ask how many candidates (minimum 2)
-- Then collect each candidate name
-- Then ask for start date and time
-- Finally ask for end date and time
+Your capabilities include:
 
-When users want to vote, help them:
-- List available active elections
-- Let them select an election
-- Show candidates in that election
-- Help them cast their vote
+**Navigation:**
+- Navigate to different pages: home/landing page, admin page, vote page, auth/login page
+- Use the navigate_to tool to change pages
 
-Always be clear, concise, and helpful. Speak naturally and confirm actions before executing them.`,
+**Election Management (Admin):**
+- Create new elections by collecting: election name, description, candidate names, start time, and end time
+- Ask for each detail one at a time systematically
+- List and view all elections with their details
+
+**Voting:**
+- Help users view active elections
+- Show candidates in each election
+- Cast votes for selected candidates
+- Confirm all voting actions
+
+**General Help:**
+- Answer questions about the platform
+- Explain how to use features
+- Provide guidance on election and voting processes
+
+Always be conversational, clear, and confirm important actions before executing them. When users ask to go somewhere or do something, help them navigate and accomplish their goals.`,
                 voice: 'alloy',
                 input_audio_format: 'pcm16',
                 output_audio_format: 'pcm16',
@@ -93,6 +95,22 @@ Always be clear, concise, and helpful. Speak naturally and confirm actions befor
                   silence_duration_ms: 1000
                 },
                 tools: [
+                  {
+                    type: 'function',
+                    name: 'navigate_to',
+                    description: 'Navigate to a different page in the application. Use this when user wants to go to a different page.',
+                    parameters: {
+                      type: 'object',
+                      properties: {
+                        page: { 
+                          type: 'string', 
+                          enum: ['home', 'admin', 'vote', 'auth'],
+                          description: 'The page to navigate to: home (landing page), admin (election management), vote (voting page), auth (login/register)'
+                        }
+                      },
+                      required: ['page']
+                    }
+                  },
                   {
                     type: 'function',
                     name: 'create_election',
@@ -121,6 +139,18 @@ Always be clear, concise, and helpful. Speak naturally and confirm actions befor
                       type: 'object',
                       properties: {},
                       required: []
+                    }
+                  },
+                  {
+                    type: 'function',
+                    name: 'get_election_details',
+                    description: 'Get detailed information about a specific election including candidates.',
+                    parameters: {
+                      type: 'object',
+                      properties: {
+                        electionId: { type: 'number', description: 'Election ID' }
+                      },
+                      required: ['electionId']
                     }
                   },
                   {

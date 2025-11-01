@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
@@ -14,11 +15,12 @@ declare global {
 }
 
 interface VoiceAssistantProps {
-  isAdmin?: boolean;
+  className?: string;
 }
 
-const VoiceAssistant = ({ isAdmin = false }: VoiceAssistantProps) => {
+const VoiceAssistant = ({ className = '' }: VoiceAssistantProps) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -42,10 +44,14 @@ const VoiceAssistant = ({ isAdmin = false }: VoiceAssistantProps) => {
     try {
       let result: any = { success: false, message: 'Function not implemented' };
 
-      if (name === 'create_election') {
+      if (name === 'navigate_to') {
+        result = navigateToPage(args);
+      } else if (name === 'create_election') {
         result = await createElection(args);
       } else if (name === 'list_elections') {
         result = await listElections();
+      } else if (name === 'get_election_details') {
+        result = await getElectionDetails(args);
       } else if (name === 'cast_vote') {
         result = await castVote(args);
       }
@@ -66,6 +72,83 @@ const VoiceAssistant = ({ isAdmin = false }: VoiceAssistantProps) => {
       }
     } catch (error) {
       console.error('Function call error:', error);
+    }
+  };
+
+  const navigateToPage = (args: any) => {
+    try {
+      const pageMap: { [key: string]: string } = {
+        'home': '/',
+        'admin': '/admin',
+        'vote': '/vote',
+        'auth': '/auth'
+      };
+
+      const path = pageMap[args.page];
+      if (path) {
+        navigate(path);
+        return { 
+          success: true, 
+          message: `Navigated to ${args.page} page` 
+        };
+      }
+      return { 
+        success: false, 
+        message: 'Invalid page specified' 
+      };
+    } catch (error: any) {
+      return { 
+        success: false, 
+        message: error.message || 'Navigation failed' 
+      };
+    }
+  };
+
+  const getElectionDetails = async (args: any) => {
+    try {
+      if (!window.ethereum) {
+        return { success: false, message: 'Wallet not found', election: null, candidates: [] };
+      }
+
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
+
+      const election = await contract.getElection(args.electionId);
+      const [title, description, startTime, endTime, active, candidatesCount, totalVotes] = election;
+
+      const candidates = [];
+      for (let i = 0; i < Number(candidatesCount); i++) {
+        try {
+          const candidate = await contract.getCandidate(args.electionId, i);
+          candidates.push({
+            id: Number(candidate[0]),
+            name: candidate[1],
+            votes: Number(candidate[2])
+          });
+        } catch (error) {
+          console.log('Error fetching candidate', i);
+        }
+      }
+
+      return {
+        success: true,
+        message: `Found election "${title}" with ${candidates.length} candidates`,
+        election: {
+          id: args.electionId,
+          title,
+          description,
+          active,
+          totalVotes: Number(totalVotes)
+        },
+        candidates
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Failed to get election details',
+        election: null,
+        candidates: []
+      };
     }
   };
 
@@ -311,8 +394,8 @@ const VoiceAssistant = ({ isAdmin = false }: VoiceAssistantProps) => {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
-      <Card className="p-6 w-80 bg-card/95 backdrop-blur-sm border-2 border-primary/20">
+    <div className={`fixed bottom-6 right-6 z-50 ${className}`}>
+      <Card className="p-6 w-80 bg-card/95 backdrop-blur-sm border-2 border-primary/20 shadow-xl">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">

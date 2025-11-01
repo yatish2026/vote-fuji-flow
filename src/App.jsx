@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import NewVote from "./pages/NewVote";
 import NewAdmin from "./pages/NewAdmin";
 import NotFound from "./pages/NotFound";
+import VoiceAssistant from "./components/VoiceAssistant";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <VoiceAssistant />
         </BrowserRouter>
       </TooltipProvider>
     </I18nextProvider>

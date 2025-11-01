@@ -758,9 +758,6 @@ const NewAdmin = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Voice Assistant */}
-      {account && <VoiceAssistant isAdmin={true} />}
     </div>
   );
 };
