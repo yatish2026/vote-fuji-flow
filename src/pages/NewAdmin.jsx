@@ -12,6 +12,7 @@ import { Wallet, BarChart3, Users, CheckCircle, AlertCircle, ArrowLeft, LogOut, 
 import { ethers } from 'ethers';
 import ElectionManager from '@/components/ElectionManager';
 import AIInsights from '@/components/AIInsights';
+import VoiceAssistant from '@/components/VoiceAssistant';
 import { FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI } from '@/lib/contract';
 import { useTranslation } from 'react-i18next';
 
@@ -757,6 +758,9 @@ const NewAdmin = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Voice Assistant */}
+      {account && <VoiceAssistant isAdmin={true} />}
     </div>
   );
 };
