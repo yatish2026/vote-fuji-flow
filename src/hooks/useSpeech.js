@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import i18n from '@/i18n/config';
-import { useToast } from './use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 export const useSpeech = () => {
   const { toast } = useToast();
