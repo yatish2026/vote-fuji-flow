@@ -1,593 +1,480 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { Mic, MicOff, Volume2, VolumeX, Loader2, X, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Mic, MicOff, Loader2, Volume2, X } from 'lucide-react';
-import { AudioRecorder, encodeAudioForAPI, playAudioData, clearAudioQueue } from '@/utils/RealtimeAudio';
+import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
-import { FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI } from '@/lib/contract';
+import { supabase } from '@/integrations/supabase/client';
 
 declare global {
   interface Window {
     ethereum?: any;
+    webkitSpeechRecognition?: any;
+    SpeechRecognition?: any;
   }
 }
+
+interface SpeechRecognitionEvent {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent {
+  error: string;
+}
+
+interface SpeechRecognition {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+// Contract ABI for voting functions
+const CONTRACT_ABI = [
+  "function getElectionCount() view returns (uint256)",
+  "function getElectionDetails(uint256) view returns (string, uint256, uint256, bool, address)",
+  "function getCandidates(uint256) view returns (tuple(string name, uint256 voteCount)[])",
+  "function vote(uint256 electionId, uint256 candidateId)",
+  "function createElection(string memory title, string[] memory candidateNames, uint256 durationInMinutes)",
+  "function electionCount() view returns (uint256)",
+  "function getElection(uint256) view returns (string, string, uint256, uint256, bool, uint256, uint256)",
+  "function getCandidate(uint256, uint256) view returns (uint256, string, uint256)"
+];
+
+const CONTRACT_ADDRESS = "0x1549f7Ddd4fCE6109F448A1C6dFDF0694d3a5fbd";
 
 interface VoiceAssistantProps {
   className?: string;
 }
 
-const VoiceAssistant = ({ className = '' }: VoiceAssistantProps) => {
+export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => {
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(true);
+  const [transcript, setTranscript] = useState('');
+  const [response, setResponse] = useState('');
+  const [detectedLanguage, setDetectedLanguage] = useState('en-US');
+  
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const isListeningRef = useRef(false);
+  const isProcessingRef = useRef(false);
+  
   const { toast } = useToast();
   const navigate = useNavigate();
-  const [isConnected, setIsConnected] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [transcript, setTranscript] = useState('');
-  const [assistantText, setAssistantText] = useState('');
-  const [isMinimized, setIsMinimized] = useState(false);
-  const [statusMessage, setStatusMessage] = useState('');
-  
-  const wsRef = useRef<WebSocket | null>(null);
-  const recorderRef = useRef<AudioRecorder | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const functionCallBufferRef = useRef<{ [key: string]: { name: string; args: string } }>({});
+
+  // Keep refs in sync
+  useEffect(() => {
+    isListeningRef.current = isListening;
+  }, [isListening]);
 
   useEffect(() => {
+    isProcessingRef.current = isProcessing;
+  }, [isProcessing]);
+
+  // Initialize Speech Recognition
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = 'en-US';
+
+      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+        let finalTranscript = '';
+        let interimTranscript = '';
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result.isFinal) {
+            finalTranscript += result[0].transcript;
+          } else {
+            interimTranscript += result[0].transcript;
+          }
+        }
+        
+        if (finalTranscript) {
+          setTranscript(finalTranscript);
+          processVoiceCommand(finalTranscript);
+        } else if (interimTranscript) {
+          setTranscript(interimTranscript);
+        }
+      };
+
+      recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error('Speech recognition error:', event.error);
+        if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          toast({ title: 'Voice Error', description: event.error });
+        }
+      };
+
+      recognitionRef.current.onend = () => {
+        if (isListeningRef.current && !isProcessingRef.current) {
+          try {
+            recognitionRef.current?.start();
+          } catch (e) {
+            console.log('Recognition restart skipped');
+          }
+        }
+      };
+    }
+
+    // Load voices
+    window.speechSynthesis.getVoices();
+
     return () => {
-      disconnect();
+      recognitionRef.current?.stop();
+      window.speechSynthesis.cancel();
     };
   }, []);
 
-  const handleFunctionCall = async (name: string, args: any, callId: string) => {
-    console.log('Function call:', name, args);
-    setStatusMessage(`Executing: ${name}...`);
+  // Speak response in detected language
+  const speak = useCallback((text: string, lang: string = 'en-US') => {
+    if (!text) return;
     
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    
+    const voices = window.speechSynthesis.getVoices();
+    const langCode = lang.split('-')[0];
+    const voice = voices.find(v => v.lang.startsWith(langCode)) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+    if (voice) utterance.voice = voice;
+    
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    
+    synthRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
+  }, []);
+
+  // Process voice command with Gemini
+  const processVoiceCommand = useCallback(async (text: string) => {
+    if (!text.trim() || isProcessingRef.current) return;
+    
+    setIsProcessing(true);
+    console.log('🎤 Processing:', text);
+
     try {
-      let result: any = { success: false, message: 'Function not implemented' };
-
-      if (name === 'navigate_to') {
-        result = navigateToPage(args);
-      } else if (name === 'create_election') {
-        result = await createElection(args);
-      } else if (name === 'list_elections') {
-        result = await listElections();
-      } else if (name === 'get_election_details') {
-        result = await getElectionDetails(args);
-      } else if (name === 'cast_vote') {
-        result = await castVote(args);
-      }
-
-      console.log('Function result:', result);
-      setStatusMessage('');
-
-      // Send function result back to OpenAI
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          type: 'conversation.item.create',
-          item: {
-            type: 'function_call_output',
-            call_id: callId,
-            output: JSON.stringify(result)
-          }
-        }));
-        
-        // Request response after function call
-        wsRef.current.send(JSON.stringify({ type: 'response.create' }));
-      }
-    } catch (error: any) {
-      console.error('Function call error:', error);
-      setStatusMessage('');
-      
-      // Send error result back
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          type: 'conversation.item.create',
-          item: {
-            type: 'function_call_output',
-            call_id: callId,
-            output: JSON.stringify({ success: false, message: error.message })
-          }
-        }));
-        wsRef.current.send(JSON.stringify({ type: 'response.create' }));
-      }
-    }
-  };
-
-  const navigateToPage = (args: any) => {
-    const pageMap: { [key: string]: string } = {
-      'home': '/',
-      'admin': '/admin',
-      'vote': '/vote',
-      'auth': '/auth'
-    };
-
-    const path = pageMap[args.page];
-    if (path) {
-      navigate(path);
-      toast({
-        title: 'Navigation',
-        description: `Navigated to ${args.page} page`
+      const { data, error } = await supabase.functions.invoke('gemini-voice', {
+        body: { message: text, language: detectedLanguage }
       });
-      return { 
-        success: true, 
-        message: `Successfully navigated to ${args.page} page` 
-      };
+
+      if (error) throw error;
+
+      console.log('🤖 Response:', data);
+      const responseText = data.response || '';
+      setResponse(responseText);
+      
+      // Detect language from response for TTS
+      let ttsLang = 'en-US';
+      if (/[\u0900-\u097F]/.test(responseText)) ttsLang = 'hi-IN';
+      else if (/[\u0B80-\u0BFF]/.test(responseText)) ttsLang = 'ta-IN';
+      else if (/[\u0C80-\u0CFF]/.test(responseText)) ttsLang = 'kn-IN';
+      else if (/[\u0C00-\u0C7F]/.test(responseText)) ttsLang = 'te-IN';
+      else if (/[\u0980-\u09FF]/.test(responseText)) ttsLang = 'bn-IN';
+      else if (/[\u0A80-\u0AFF]/.test(responseText)) ttsLang = 'gu-IN';
+      else if (/[\u0B00-\u0B7F]/.test(responseText)) ttsLang = 'or-IN';
+      else if (/[\u0A00-\u0A7F]/.test(responseText)) ttsLang = 'pa-IN';
+      
+      setDetectedLanguage(ttsLang);
+      speak(responseText, ttsLang);
+
+      if (data.action) {
+        await executeAction(data.action);
+      }
+
+    } catch (error) {
+      console.error('❌ Error processing command:', error);
+      const errorMsg = 'Sorry, I had trouble processing that. Please try again.';
+      setResponse(errorMsg);
+      speak(errorMsg);
+    } finally {
+      setIsProcessing(false);
     }
-    return { 
-      success: false, 
-      message: 'Invalid page specified' 
-    };
-  };
+  }, [detectedLanguage, speak]);
 
-  const getElectionDetails = async (args: any) => {
-    try {
-      if (!window.ethereum) {
-        return { success: false, message: 'Please connect your wallet first', election: null, candidates: [] };
-      }
+  // Execute parsed action
+  const executeAction = useCallback(async (action: any) => {
+    console.log('⚡ Executing action:', action);
 
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
+    switch (action.action) {
+      case 'navigate':
+        const routes: Record<string, string> = {
+          'home': '/',
+          'vote': '/vote',
+          'admin': '/admin',
+          'results': '/vote',
+          'auth': '/auth'
+        };
+        const route = routes[action.page] || '/';
+        navigate(route);
+        toast({ title: `Navigating to ${action.page}` });
+        break;
 
-      const election = await contract.getElection(args.electionId);
-      const [title, description, startTime, endTime, active, candidatesCount, totalVotes] = election;
+      case 'list_elections':
+        await listElections();
+        break;
 
-      const candidates = [];
-      for (let i = 0; i < Number(candidatesCount); i++) {
-        try {
-          const candidate = await contract.getCandidate(args.electionId, i);
-          candidates.push({
-            id: Number(candidate[0]),
-            name: candidate[1],
-            votes: Number(candidate[2])
-          });
-        } catch (error) {
-          console.log('Error fetching candidate', i);
-        }
-      }
+      case 'get_election':
+        await getElectionDetails(action.electionId);
+        break;
 
-      const candidateList = candidates.map(c => `ID ${c.id}: ${c.name}`).join(', ');
+      case 'cast_vote':
+        await castVote(action.electionId, action.candidateId);
+        break;
 
-      return {
-        success: true,
-        message: `Election "${title}" has ${candidates.length} candidates: ${candidateList}. The election is currently ${active ? 'active' : 'inactive'}.`,
-        election: {
-          id: args.electionId,
-          title,
-          description,
-          active,
-          totalVotes: Number(totalVotes)
-        },
-        candidates
-      };
-    } catch (error: any) {
-      return {
-        success: false,
-        message: error.message || 'Failed to get election details',
-        election: null,
-        candidates: []
-      };
+      case 'create_election':
+        await createElection(action.title, action.candidates);
+        break;
     }
-  };
+  }, [navigate, toast]);
 
-  const createElection = async (args: any) => {
-    try {
-      if (!window.ethereum) {
-        return { success: false, message: 'Please connect your wallet first' };
-      }
-
-      const provider = new ethers.BrowserProvider(window.ethereum);
+  // Blockchain functions
+  const getContract = useCallback(async (needSigner = false) => {
+    if (!window.ethereum) {
+      throw new Error('Please install MetaMask');
+    }
+    const provider = new ethers.BrowserProvider(window.ethereum);
+    if (needSigner) {
       const signer = await provider.getSigner();
-      const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, signer);
-
-      const startTimestamp = Math.floor(new Date(args.startTime).getTime() / 1000);
-      const endTimestamp = Math.floor(new Date(args.endTime).getTime() / 1000);
-
-      const tx = await contract.createElection(
-        args.title,
-        args.description,
-        args.candidates,
-        startTimestamp,
-        endTimestamp
-      );
-
-      await tx.wait();
-      
-      toast({
-        title: 'Election Created!',
-        description: `"${args.title}" with ${args.candidates.length} candidates`
-      });
-
-      return { 
-        success: true, 
-        message: `Election "${args.title}" has been created successfully with candidates: ${args.candidates.join(', ')}` 
-      };
-    } catch (error: any) {
-      console.error('Create election error:', error);
-      return { 
-        success: false, 
-        message: error.reason || error.message || 'Failed to create election' 
-      };
+      return new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
     }
-  };
+    return new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+  }, []);
 
-  const listElections = async () => {
+  const listElections = useCallback(async () => {
     try {
-      if (!window.ethereum) {
-        return { success: false, message: 'Please connect your wallet first', elections: [] };
+      const contract = await getContract();
+      let count;
+      try {
+        count = await contract.getElectionCount();
+      } catch {
+        count = await contract.electionCount();
       }
-
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, provider);
-
-      const electionCount = await contract.electionCount();
-      const elections = [];
-
-      for (let i = 0; i < Number(electionCount); i++) {
+      
+      const elections: string[] = [];
+      for (let i = 0; i < Number(count); i++) {
         try {
-          const election = await contract.getElection(i);
-          elections.push({
-            id: i,
-            title: election[0],
-            active: election[4]
-          });
-        } catch (error) {
+          let title;
+          try {
+            const details = await contract.getElectionDetails(i);
+            title = details[0];
+          } catch {
+            const election = await contract.getElection(i);
+            title = election[0];
+          }
+          elections.push(`${i + 1}. ${title}`);
+        } catch (e) {
           console.log('Error fetching election', i);
         }
       }
-
-      if (elections.length === 0) {
-        return { 
-          success: true, 
-          message: 'No elections found',
-          elections: [] 
-        };
-      }
-
-      const electionList = elections.map(e => `ID ${e.id}: ${e.title} (${e.active ? 'active' : 'inactive'})`).join(', ');
-
-      return { 
-        success: true, 
-        message: `Found ${elections.length} elections: ${electionList}`,
-        elections 
-      };
-    } catch (error: any) {
-      return { 
-        success: false, 
-        message: error.message || 'Failed to list elections',
-        elections: [] 
-      };
-    }
-  };
-
-  const castVote = async (args: any) => {
-    try {
-      if (!window.ethereum) {
-        return { success: false, message: 'Please connect your wallet first' };
-      }
-
-      setStatusMessage('Casting your vote...');
       
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(FACTORY_CONTRACT_ADDRESS, FACTORY_CONTRACT_ABI, signer);
+      const message = elections.length > 0 
+        ? `Found ${elections.length} elections: ${elections.join(', ')}`
+        : 'No elections found.';
+      
+      speak(message, detectedLanguage);
+      setResponse(message);
+    } catch (error) {
+      console.error('Error listing elections:', error);
+      const msg = 'Could not fetch elections. Make sure your wallet is connected.';
+      speak(msg);
+      setResponse(msg);
+    }
+  }, [getContract, speak, detectedLanguage]);
 
-      // Get candidate name for confirmation
-      let candidateName = '';
+  const getElectionDetails = useCallback(async (electionId: number) => {
+    try {
+      const contract = await getContract();
+      let title, candidateList;
+      
       try {
-        const candidate = await contract.getCandidate(args.electionId, args.candidateId);
-        candidateName = candidate[1];
-      } catch (e) {
-        console.log('Could not get candidate name');
+        const details = await contract.getElectionDetails(electionId);
+        title = details[0];
+        const candidates = await contract.getCandidates(electionId);
+        candidateList = candidates.map((c: any, i: number) => 
+          `${i + 1}. ${c.name} with ${c.voteCount} votes`
+        ).join(', ');
+      } catch {
+        const election = await contract.getElection(electionId);
+        title = election[0];
+        const candidatesCount = Number(election[5]);
+        const candidates = [];
+        for (let i = 0; i < candidatesCount; i++) {
+          const c = await contract.getCandidate(electionId, i);
+          candidates.push(`${i + 1}. ${c[1]} with ${c[2]} votes`);
+        }
+        candidateList = candidates.join(', ');
       }
+      
+      const message = `Election: ${title}. Candidates: ${candidateList}`;
+      speak(message, detectedLanguage);
+      setResponse(message);
+    } catch (error) {
+      console.error('Error getting election:', error);
+      const msg = 'Could not fetch election details.';
+      speak(msg);
+      setResponse(msg);
+    }
+  }, [getContract, speak, detectedLanguage]);
 
-      const tx = await contract.vote(args.electionId, args.candidateId);
+  const castVote = useCallback(async (electionId: number, candidateId: number) => {
+    try {
+      const contract = await getContract(true);
+      toast({ title: 'Casting vote...' });
+      
+      const tx = await contract.vote(electionId, candidateId);
       await tx.wait();
       
-      toast({
-        title: '🗳️ Vote Cast Successfully!',
-        description: candidateName ? `You voted for ${candidateName}` : 'Your vote has been recorded on the blockchain'
-      });
-
-      return { 
-        success: true, 
-        message: candidateName 
-          ? `Vote successfully cast for ${candidateName}! Your vote has been permanently recorded on the blockchain.`
-          : 'Vote successfully cast! Your vote has been recorded on the blockchain.'
-      };
+      const message = 'Your vote has been cast successfully!';
+      speak(message, detectedLanguage);
+      setResponse(message);
+      toast({ title: 'Vote Cast!', description: 'Transaction confirmed.' });
     } catch (error: any) {
-      const message = error.reason || error.message || 'Failed to cast vote';
-      toast({
-        title: 'Vote Failed',
-        description: message
-      });
-      return { 
-        success: false,
-        message: message
-      };
+      console.error('Error casting vote:', error);
+      const errMsg = error.reason || 'Failed to cast vote.';
+      speak(errMsg);
+      setResponse(errMsg);
+      toast({ title: 'Vote Failed', description: errMsg });
     }
-  };
+  }, [getContract, speak, detectedLanguage, toast]);
 
-  const connect = async () => {
+  const createElection = useCallback(async (title: string, candidates: string[]) => {
     try {
-      setIsConnecting(true);
-      setStatusMessage('Requesting microphone access...');
+      const contract = await getContract(true);
+      toast({ title: 'Creating election...' });
       
-      // Request microphone permission
-      await navigator.mediaDevices.getUserMedia({ audio: true });
+      const tx = await contract.createElection(title, candidates, 60);
+      await tx.wait();
       
-      // Initialize audio context
-      audioContextRef.current = new AudioContext({ sampleRate: 24000 });
-      
-      setStatusMessage('Connecting to voice service...');
-      
-      // Connect to WebSocket
-      const projectId = 'jydpniwgkjsncgyeqgkx';
-      const wsUrl = `wss://${projectId}.supabase.co/functions/v1/realtime-voice`;
-      
-      console.log('Connecting to:', wsUrl);
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      const connectionTimeout = setTimeout(() => {
-        if (ws.readyState !== WebSocket.OPEN) {
-          console.error('Connection timeout');
-          ws.close();
-        toast({
-          title: 'Connection Timeout',
-          description: 'Unable to connect to voice service. Please try again.'
-        });
-        setIsConnecting(false);
-        setStatusMessage('');
-      }
-    }, 15000);
-
-    ws.onopen = () => {
-        console.log('WebSocket connected to edge function');
-        setStatusMessage('Initializing AI...');
-      };
-
-      ws.onmessage = async (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log('Message type:', data.type);
-          
-          if (data.type === 'session.ready' || data.type === 'session.created') {
-            clearTimeout(connectionTimeout);
-            setIsConnected(true);
-            setIsConnecting(false);
-            setStatusMessage('');
-            
-            // Start recording
-            recorderRef.current = new AudioRecorder((audioData) => {
-              if (ws.readyState === WebSocket.OPEN) {
-                const encoded = encodeAudioForAPI(audioData);
-                ws.send(JSON.stringify({
-                  type: 'input_audio_buffer.append',
-                  audio: encoded
-                }));
-              }
-            });
-            
-            await recorderRef.current.start();
-            
-            toast({
-              title: '🎤 Voice Assistant Active',
-              description: 'Speak in any language to control the app'
-            });
-          } else if (data.type === 'response.audio.delta') {
-            setIsSpeaking(true);
-            const binaryString = atob(data.delta);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-              bytes[i] = binaryString.charCodeAt(i);
-            }
-            if (audioContextRef.current) {
-              await playAudioData(audioContextRef.current, bytes);
-            }
-          } else if (data.type === 'response.audio.done') {
-            setIsSpeaking(false);
-          } else if (data.type === 'conversation.item.input_audio_transcription.completed') {
-            console.log('Voice transcript:', data.transcript);
-            setTranscript(data.transcript);
-          } else if (data.type === 'response.audio_transcript.delta') {
-            setAssistantText(prev => prev + data.delta);
-          } else if (data.type === 'response.audio_transcript.done') {
-            // Keep the text visible for a moment before clearing
-            setTimeout(() => setAssistantText(''), 3000);
-          } else if (data.type === 'response.function_call_arguments.delta') {
-            const callId = data.call_id;
-            if (!functionCallBufferRef.current[callId]) {
-              functionCallBufferRef.current[callId] = { name: data.name || '', args: '' };
-            }
-            if (data.name) {
-              functionCallBufferRef.current[callId].name = data.name;
-            }
-            functionCallBufferRef.current[callId].args += data.delta;
-          } else if (data.type === 'response.function_call_arguments.done') {
-            const callId = data.call_id;
-            const buffer = functionCallBufferRef.current[callId];
-            const argsString = buffer?.args || data.arguments;
-            const funcName = buffer?.name || data.name;
-            
-            try {
-              const args = JSON.parse(argsString);
-              await handleFunctionCall(funcName, args, callId);
-            } catch (error) {
-              console.error('Error parsing function args:', error, argsString);
-            }
-            delete functionCallBufferRef.current[callId];
-          } else if (data.type === 'error') {
-            console.error('Error from server:', data.error);
-            toast({
-              title: 'Error',
-              description: typeof data.error === 'string' ? data.error : 'Voice service error'
-            });
-            setIsConnecting(false);
-            setStatusMessage('');
-          }
-        } catch (error) {
-          console.error('Error processing message:', error);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        clearTimeout(connectionTimeout);
-        toast({
-          title: 'Connection Error',
-          description: 'Failed to connect to voice assistant'
-        });
-        setIsConnecting(false);
-        setStatusMessage('');
-      };
-
-      ws.onclose = () => {
-        console.log('WebSocket closed');
-        clearTimeout(connectionTimeout);
-        setIsConnected(false);
-        setIsConnecting(false);
-        recorderRef.current?.stop();
-        clearAudioQueue();
-        setStatusMessage('');
-      };
-
+      const message = `Election "${title}" created successfully!`;
+      speak(message, detectedLanguage);
+      setResponse(message);
+      toast({ title: 'Election Created!', description: message });
     } catch (error: any) {
-      console.error('Connection error:', error);
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to start voice assistant'
-      });
-      setIsConnecting(false);
-      setStatusMessage('');
+      console.error('Error creating election:', error);
+      const errMsg = 'Failed to create election.';
+      speak(errMsg);
+      setResponse(errMsg);
+      toast({ title: 'Creation Failed', description: error.reason || 'Unknown error' });
     }
-  };
+  }, [getContract, speak, detectedLanguage, toast]);
 
-  const disconnect = () => {
-    wsRef.current?.close();
-    recorderRef.current?.stop();
-    audioContextRef.current?.close();
-    clearAudioQueue();
-    setIsConnected(false);
-    setTranscript('');
-    setAssistantText('');
-    setStatusMessage('');
-    functionCallBufferRef.current = {};
-  };
+  // Toggle listening
+  const toggleListening = useCallback(() => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+    } else {
+      setTranscript('');
+      setResponse('');
+      try {
+        recognitionRef.current?.start();
+        setIsListening(true);
+        speak('I\'m listening. How can I help you?', 'en-US');
+      } catch (e) {
+        console.error('Failed to start recognition:', e);
+      }
+    }
+  }, [isListening, speak]);
+
+  // Stop speaking
+  const stopSpeaking = useCallback(() => {
+    window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+  }, []);
+
+  const isSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+
+  if (!isSupported) {
+    return null;
+  }
 
   if (isMinimized) {
     return (
-      <div className={`fixed bottom-6 right-6 z-50 ${className}`}>
-        <Button
-          onClick={() => setIsMinimized(false)}
-          className={`rounded-full w-14 h-14 shadow-lg ${
-            isConnected 
-              ? 'bg-gradient-to-r from-green-500 to-emerald-500' 
-              : 'bg-gradient-to-r from-primary to-accent'
-          }`}
-        >
-          {isSpeaking ? (
-            <Volume2 className="w-6 h-6 animate-pulse" />
-          ) : (
-            <Mic className="w-6 h-6" />
-          )}
-        </Button>
-      </div>
+      <Button
+        onClick={() => setIsMinimized(false)}
+        className="fixed bottom-20 right-4 z-50 h-14 w-14 rounded-full bg-primary shadow-lg hover:bg-primary/90"
+        size="icon"
+      >
+        <MessageCircle className="h-6 w-6" />
+      </Button>
     );
   }
 
   return (
-    <div className={`fixed bottom-6 right-6 z-50 ${className}`}>
-      <Card className="p-4 w-80 bg-card/95 backdrop-blur-sm border-2 border-primary/20 shadow-xl">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Volume2 className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold text-sm">Voice Assistant</h3>
-            </div>
-            <div className="flex items-center gap-1">
-              {isSpeaking && (
-                <div className="flex gap-0.5 mr-2">
-                  <div className="w-1 h-3 bg-primary rounded-full animate-pulse" />
-                  <div className="w-1 h-3 bg-primary rounded-full animate-pulse" style={{ animationDelay: '75ms' }} />
-                  <div className="w-1 h-3 bg-primary rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
-                </div>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                onClick={() => setIsMinimized(true)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-
-          {statusMessage && (
-            <div className="text-xs text-muted-foreground bg-muted/50 p-2 rounded animate-pulse">
-              {statusMessage}
-            </div>
-          )}
-
-          {(transcript || assistantText) && (
-            <div className="space-y-2 text-sm max-h-32 overflow-y-auto">
-              {transcript && (
-                <div className="p-2 bg-primary/10 rounded">
-                  <p className="font-medium text-xs text-muted-foreground mb-0.5">You:</p>
-                  <p className="text-xs">{transcript}</p>
-                </div>
-              )}
-              {assistantText && (
-                <div className="p-2 bg-accent/10 rounded">
-                  <p className="font-medium text-xs text-muted-foreground mb-0.5">Assistant:</p>
-                  <p className="text-xs">{assistantText}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            {!isConnected ? (
-              <Button
-                onClick={connect}
-                disabled={isConnecting}
-                className="w-full bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
-                size="sm"
-              >
-                {isConnecting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Connecting...
-                  </>
-                ) : (
-                  <>
-                    <Mic className="w-4 h-4 mr-2" />
-                    Start Voice Control
-                  </>
-                )}
-              </Button>
-            ) : (
-              <Button
-                onClick={disconnect}
-                variant="outline"
-                className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
-                size="sm"
-              >
-                <MicOff className="w-4 h-4 mr-2" />
-                Stop
-              </Button>
-            )}
-          </div>
-
-          <p className="text-[10px] text-muted-foreground text-center">
-            {isConnected 
-              ? '🎤 Listening... Speak in any language' 
-              : 'Click to start voice commands'}
-          </p>
+    <div className={`fixed bottom-20 right-4 z-50 w-80 rounded-xl border bg-card shadow-2xl ${className}`}>
+      <div className="flex items-center justify-between border-b p-3">
+        <div className="flex items-center gap-2">
+          <div className={`h-2 w-2 rounded-full ${isListening ? 'bg-green-500 animate-pulse' : 'bg-muted'}`} />
+          <span className="font-medium text-sm">Voice Assistant</span>
         </div>
-      </Card>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsMinimized(true)}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {transcript && (
+          <div className="rounded-lg bg-muted/50 p-3">
+            <p className="text-xs text-muted-foreground mb-1">You said:</p>
+            <p className="text-sm">{transcript}</p>
+          </div>
+        )}
+
+        {isProcessing && (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Processing...</span>
+          </div>
+        )}
+
+        {response && !isProcessing && (
+          <div className="rounded-lg bg-primary/10 p-3">
+            <p className="text-xs text-muted-foreground mb-1">Assistant:</p>
+            <p className="text-sm">{response}</p>
+          </div>
+        )}
+
+        <div className="flex items-center justify-center gap-3">
+          <Button
+            onClick={toggleListening}
+            size="lg"
+            className={`h-14 w-14 rounded-full ${
+              isListening 
+                ? 'bg-destructive hover:bg-destructive/90' 
+                : 'bg-primary hover:bg-primary/90'
+            }`}
+          >
+            {isListening ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
+          </Button>
+
+          <Button
+            onClick={stopSpeaking}
+            size="lg"
+            variant="outline"
+            className="h-14 w-14 rounded-full"
+            disabled={!isSpeaking}
+          >
+            {isSpeaking ? <VolumeX className="h-6 w-6" /> : <Volume2 className="h-6 w-6" />}
+          </Button>
+        </div>
+
+        <p className="text-center text-xs text-muted-foreground">
+          {isListening ? '🎤 Listening... Speak now!' : 'Tap mic to start'}
+        </p>
+      </div>
     </div>
   );
 };
