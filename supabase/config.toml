@@ -2,3 +2,9 @@ project_id = "jydpniwgkjsncgyeqgkx"
 
 [functions.realtime-voice]
 verify_jwt = false
+
+[functions.gemini-voice]
+verify_jwt = false
+
+[functions.get-user-email]
+verify_jwt = false
