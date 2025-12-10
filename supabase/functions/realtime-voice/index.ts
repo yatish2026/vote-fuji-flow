@@ -9,25 +9,19 @@ const corsHeaders = {
 serve(async (req) => {
   console.log('=== Realtime Voice Function Called ===');
   console.log('Method:', req.method);
-  console.log('Headers:', Object.fromEntries(req.headers.entries()));
   
   if (req.method === 'OPTIONS') {
-    console.log('Handling CORS preflight');
     return new Response('ok', { headers: corsHeaders });
   }
 
   const upgrade = req.headers.get('upgrade') || '';
-  console.log('Upgrade header:', upgrade);
   
   if (upgrade.toLowerCase() !== 'websocket') {
-    console.log('Not a WebSocket request');
     return new Response('Expected websocket', { status: 426, headers: corsHeaders });
   }
 
   try {
-    console.log('Upgrading to WebSocket...');
     const { socket: clientSocket, response } = Deno.upgradeWebSocket(req);
-    console.log('WebSocket upgrade successful');
 
     let openaiWs: WebSocket | null = null;
     
@@ -46,169 +40,188 @@ serve(async (req) => {
       }
 
       try {
-        const url = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01';
-        console.log('Connecting to OpenAI at:', url);
-        openaiWs = new WebSocket(url, {
+        // Get ephemeral token from OpenAI
+        console.log('Requesting ephemeral token from OpenAI...');
+        const tokenResponse = await fetch('https://api.openai.com/v1/realtime/sessions', {
+          method: 'POST',
           headers: {
             'Authorization': `Bearer ${OPENAI_API_KEY}`,
-            'OpenAI-Beta': 'realtime=v1'
-          }
-        });
-
-        openaiWs.onopen = () => {
-          console.log('✅ Connected to OpenAI');
-        };
-
-      openaiWs.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          console.log('OpenAI message type:', message.type);
-          
-          // Send session.update after session.created
-          if (message.type === 'session.created') {
-            const sessionConfig = {
-              type: 'session.update',
-              session: {
-                modalities: ['text', 'audio'],
-                instructions: `You are a helpful voice assistant for an election voting platform. 
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-realtime-preview-2024-12-17',
+            voice: 'alloy',
+            instructions: `You are a multilingual voice assistant for an election voting platform. 
+You MUST respond in the SAME LANGUAGE the user speaks to you. If they speak Hindi, respond in Hindi. If they speak Tamil, respond in Tamil. If they speak any other language, respond in that language.
 
 Your capabilities include:
 
 **Navigation:**
 - Navigate to different pages: home/landing page, admin page, vote page, auth/login page
-- Use the navigate_to tool to change pages
+- Use the navigate_to tool to change pages when user asks
 
 **Election Management (Admin):**
 - Create new elections by collecting: election name, description, candidate names, start time, and end time
-- Ask for each detail one at a time systematically
 - List and view all elections with their details
 
-**Voting:**
-- Help users view active elections
-- Show candidates in each election
-- Cast votes for selected candidates
-- Confirm all voting actions
+**Voting (Most Important):**
+- When user wants to vote, first list available elections using list_elections
+- Then get election details with get_election_details to show candidates
+- Ask user which candidate they want to vote for by name
+- Match the candidate name to the candidate ID and cast the vote using cast_vote
+- ALWAYS confirm the vote was cast successfully
 
 **General Help:**
-- Answer questions about the platform
+- Answer questions about the platform in user's language
 - Explain how to use features
 - Provide guidance on election and voting processes
 
-Always be conversational, clear, and confirm important actions before executing them. When users ask to go somewhere or do something, help them navigate and accomplish their goals.`,
-                voice: 'alloy',
-                input_audio_format: 'pcm16',
-                output_audio_format: 'pcm16',
-                input_audio_transcription: {
-                  model: 'whisper-1'
-                },
-                turn_detection: {
-                  type: 'server_vad',
-                  threshold: 0.5,
-                  prefix_padding_ms: 300,
-                  silence_duration_ms: 1000
-                },
-                tools: [
-                  {
-                    type: 'function',
-                    name: 'navigate_to',
-                    description: 'Navigate to a different page in the application. Use this when user wants to go to a different page.',
-                    parameters: {
-                      type: 'object',
-                      properties: {
-                        page: { 
-                          type: 'string', 
-                          enum: ['home', 'admin', 'vote', 'auth'],
-                          description: 'The page to navigate to: home (landing page), admin (election management), vote (voting page), auth (login/register)'
-                        }
-                      },
-                      required: ['page']
+Always be conversational, clear, and confirm important actions. When a user says they want to vote, guide them through the entire process step by step.`,
+            input_audio_transcription: {
+              model: 'whisper-1'
+            },
+            turn_detection: {
+              type: 'server_vad',
+              threshold: 0.5,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 800
+            },
+            tools: [
+              {
+                type: 'function',
+                name: 'navigate_to',
+                description: 'Navigate to a different page in the application.',
+                parameters: {
+                  type: 'object',
+                  properties: {
+                    page: { 
+                      type: 'string', 
+                      enum: ['home', 'admin', 'vote', 'auth'],
+                      description: 'The page to navigate to'
                     }
                   },
-                  {
-                    type: 'function',
-                    name: 'create_election',
-                    description: 'Create a new election with all required details. Tell the user you are creating the election.',
-                    parameters: {
-                      type: 'object',
-                      properties: {
-                        title: { type: 'string', description: 'Election title/name' },
-                        description: { type: 'string', description: 'Election description' },
-                        candidates: { 
-                          type: 'array', 
-                          items: { type: 'string' },
-                          description: 'Array of candidate names'
-                        },
-                        startTime: { type: 'string', description: 'Start date and time in ISO format' },
-                        endTime: { type: 'string', description: 'End date and time in ISO format' }
-                      },
-                      required: ['title', 'description', 'candidates', 'startTime', 'endTime']
-                    }
+                  required: ['page']
+                }
+              },
+              {
+                type: 'function',
+                name: 'create_election',
+                description: 'Create a new election with all required details.',
+                parameters: {
+                  type: 'object',
+                  properties: {
+                    title: { type: 'string', description: 'Election title/name' },
+                    description: { type: 'string', description: 'Election description' },
+                    candidates: { 
+                      type: 'array', 
+                      items: { type: 'string' },
+                      description: 'Array of candidate names'
+                    },
+                    startTime: { type: 'string', description: 'Start date and time in ISO format' },
+                    endTime: { type: 'string', description: 'End date and time in ISO format' }
                   },
-                  {
-                    type: 'function',
-                    name: 'list_elections',
-                    description: 'Get list of all elections. Tell the user you are fetching the elections.',
-                    parameters: {
-                      type: 'object',
-                      properties: {},
-                      required: []
-                    }
+                  required: ['title', 'description', 'candidates', 'startTime', 'endTime']
+                }
+              },
+              {
+                type: 'function',
+                name: 'list_elections',
+                description: 'Get list of all elections. Call this first when user wants to vote.',
+                parameters: {
+                  type: 'object',
+                  properties: {},
+                  required: []
+                }
+              },
+              {
+                type: 'function',
+                name: 'get_election_details',
+                description: 'Get detailed information about a specific election including all candidates and their IDs.',
+                parameters: {
+                  type: 'object',
+                  properties: {
+                    electionId: { type: 'number', description: 'Election ID' }
                   },
-                  {
-                    type: 'function',
-                    name: 'get_election_details',
-                    description: 'Get detailed information about a specific election including candidates.',
-                    parameters: {
-                      type: 'object',
-                      properties: {
-                        electionId: { type: 'number', description: 'Election ID' }
-                      },
-                      required: ['electionId']
-                    }
+                  required: ['electionId']
+                }
+              },
+              {
+                type: 'function',
+                name: 'cast_vote',
+                description: 'Cast a vote for a candidate. Use the candidate ID from get_election_details.',
+                parameters: {
+                  type: 'object',
+                  properties: {
+                    electionId: { type: 'number', description: 'Election ID' },
+                    candidateId: { type: 'number', description: 'Candidate ID to vote for' }
                   },
-                  {
-                    type: 'function',
-                    name: 'cast_vote',
-                    description: 'Cast a vote for a candidate in an election. Tell the user you are recording their vote.',
-                    parameters: {
-                      type: 'object',
-                      properties: {
-                        electionId: { type: 'number', description: 'Election ID' },
-                        candidateId: { type: 'number', description: 'Candidate ID to vote for' }
-                      },
-                      required: ['electionId', 'candidateId']
-                    }
-                  }
-                ],
-                tool_choice: 'auto',
-                temperature: 0.8,
-                max_response_output_tokens: 'inf'
+                  required: ['electionId', 'candidateId']
+                }
               }
-            };
-            
-            openaiWs?.send(JSON.stringify(sessionConfig));
-            console.log('Session configuration sent');
-          }
-          
-          // Forward all messages to client
-          clientSocket.send(event.data);
-        } catch (error) {
-          console.error('Error processing OpenAI message:', error);
+            ],
+            tool_choice: 'auto'
+          }),
+        });
+
+        if (!tokenResponse.ok) {
+          const errorText = await tokenResponse.text();
+          console.error('❌ Failed to get ephemeral token:', errorText);
+          clientSocket.send(JSON.stringify({ 
+            type: 'error', 
+            error: 'Failed to connect to OpenAI' 
+          }));
+          clientSocket.close();
+          return;
         }
-      };
 
-      openaiWs.onerror = (error) => {
-        console.error('OpenAI WebSocket error:', error);
-        clientSocket.send(JSON.stringify({ 
-          type: 'error', 
-          error: 'OpenAI connection error' 
-        }));
-      };
+        const tokenData = await tokenResponse.json();
+        const ephemeralKey = tokenData.client_secret?.value;
+        
+        if (!ephemeralKey) {
+          console.error('❌ No ephemeral key in response');
+          clientSocket.send(JSON.stringify({ 
+            type: 'error', 
+            error: 'Failed to get authentication token' 
+          }));
+          clientSocket.close();
+          return;
+        }
 
-      openaiWs.onclose = () => {
-        console.log('OpenAI connection closed');
-        clientSocket.close();
-      };
+        console.log('✅ Got ephemeral token, connecting to OpenAI Realtime...');
+        
+        // Connect to OpenAI with ephemeral token
+        const url = `wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17`;
+        openaiWs = new WebSocket(url, ['realtime', `openai-insecure-api-key.${ephemeralKey}`, 'openai-beta.realtime-v1']);
+
+        openaiWs.onopen = () => {
+          console.log('✅ Connected to OpenAI Realtime API');
+          clientSocket.send(JSON.stringify({ type: 'session.ready' }));
+        };
+
+        openaiWs.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data);
+            console.log('OpenAI message type:', message.type);
+            
+            // Forward all messages to client
+            clientSocket.send(event.data);
+          } catch (error) {
+            console.error('Error processing OpenAI message:', error);
+          }
+        };
+
+        openaiWs.onerror = (error) => {
+          console.error('❌ OpenAI WebSocket error:', error);
+          clientSocket.send(JSON.stringify({ 
+            type: 'error', 
+            error: 'OpenAI connection error' 
+          }));
+        };
+
+        openaiWs.onclose = (event) => {
+          console.log('OpenAI connection closed:', event.code, event.reason);
+          clientSocket.close();
+        };
 
       } catch (error) {
         console.error('❌ Error connecting to OpenAI:', error);
@@ -231,7 +244,7 @@ Always be conversational, clear, and confirm important actions before executing 
     };
 
     clientSocket.onclose = () => {
-      console.log('❌ Client disconnected');
+      console.log('Client disconnected');
       openaiWs?.close();
     };
 
