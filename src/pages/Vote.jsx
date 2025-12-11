@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { LanguageSelector } from '@/components/LanguageSelector';
-import { VoiceControls } from '@/components/VoiceControls';
+import { VoiceAssistant } from '@/components/VoiceAssistant';
 import { useSpeech } from '@/hooks/useSpeech';
 import { Clock, Vote as VoteIcon, CheckCircle, Wallet, Shield, Zap, Globe, Activity, Calendar, Users, BarChart3, AlertCircle, ArrowLeft } from 'lucide-react';
 import { ethers } from 'ethers';
@@ -291,11 +291,10 @@ const Vote = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 pb-24">
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <LanguageSelector />
-          <VoiceControls onVoiceCommand={handleVoiceCommand} compact={true} />
         </div>
 
         <div className="text-center mb-12">
@@ -551,6 +550,9 @@ const Vote = () => {
           </div>
         )}
       </div>
+      
+      {/* Voice Assistant - Full width bottom bar */}
+      <VoiceAssistant />
     </div>
   );
 };
