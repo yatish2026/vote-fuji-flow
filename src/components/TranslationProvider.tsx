@@ -13,9 +13,9 @@ const TRANSLATION_API_KEY = import.meta.env.VITE_CLOUD_TRANSLATION_API_KEY || 'A
 
 const SUPPORTED_LANGUAGES = [
   { code: 'en', name: 'English', native: 'English' },
-  { code: 'hi', name: 'Hindi', native: 'हिन्दी' },
-  { code: 'ta', name: 'Tamil', native: 'தமிழ்' },
   { code: 'te', name: 'Telugu', native: 'తెలుగు' },
+  { code: 'hi', name: 'Hindi', native: 'हिंदी' },
+  { code: 'ta', name: 'Tamil', native: 'தமிழ்' },
   { code: 'bn', name: 'Bengali', native: 'বাংলা' },
   { code: 'mr', name: 'Marathi', native: 'मराठी' },
   { code: 'kn', name: 'Kannada', native: 'ಕನ್ನಡ' },
