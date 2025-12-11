@@ -414,69 +414,70 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
   }
 
   return (
-    <div className={`fixed bottom-0 left-0 right-0 z-50 border-t bg-card/95 backdrop-blur-sm shadow-2xl ${className}`}>
-      <div className="flex items-center justify-between px-6 py-4">
-        {/* Left: Status and Title */}
-        <div className="flex items-center gap-3">
-          <div className={`h-2.5 w-2.5 rounded-full ${isListening ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/50'}`} />
-          <span className="font-medium text-sm">Voice Assistant</span>
-          {transcript && (
-            <span className="text-xs text-muted-foreground ml-4 max-w-xs truncate hidden sm:inline">
-              "{transcript}"
-            </span>
-          )}
-        </div>
-
-        {/* Center: Controls */}
+    <div className={`fixed bottom-6 right-6 z-50 w-80 rounded-xl border bg-card shadow-2xl ${className}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between border-b p-3">
         <div className="flex items-center gap-2">
-          {isProcessing && (
-            <div className="flex items-center gap-2 text-muted-foreground mr-4">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-xs hidden sm:inline">Processing...</span>
-            </div>
-          )}
+          <div className={`h-2 w-2 rounded-full ${isListening ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/50'}`} />
+          <span className="font-medium text-sm">Voice Assistant</span>
+        </div>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsMinimized(true)}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
 
+      {/* Content */}
+      <div className="p-4 space-y-4">
+        {transcript && (
+          <div className="rounded-lg bg-muted/50 p-3">
+            <p className="text-xs text-muted-foreground mb-1">You said:</p>
+            <p className="text-sm">{transcript}</p>
+          </div>
+        )}
+
+        {isProcessing && (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm">Processing...</span>
+          </div>
+        )}
+
+        {response && !isProcessing && (
+          <div className="rounded-lg bg-primary/10 p-3">
+            <p className="text-xs text-muted-foreground mb-1">Assistant:</p>
+            <p className="text-sm">{response}</p>
+          </div>
+        )}
+
+        {/* Controls */}
+        <div className="flex items-center justify-center gap-3">
           <Button
             onClick={toggleListening}
             size="lg"
-            className={`h-12 px-6 rounded-full ${
+            className={`h-14 w-14 rounded-full ${
               isListening 
                 ? 'bg-destructive hover:bg-destructive/90' 
                 : 'bg-primary hover:bg-primary/90'
             }`}
           >
-            {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+            {isListening ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
           </Button>
 
           <Button
             onClick={stopSpeaking}
             size="lg"
             variant="outline"
-            className="h-12 px-6 rounded-full"
+            className="h-14 w-14 rounded-full"
             disabled={!isSpeaking}
           >
-            {isSpeaking ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+            {isSpeaking ? <VolumeX className="h-6 w-6" /> : <Volume2 className="h-6 w-6" />}
           </Button>
-
-          <p className="text-xs text-muted-foreground ml-4 hidden sm:block">
-            {isListening ? 'Listening...' : 'Tap mic to start'}
-          </p>
         </div>
 
-        {/* Right: Close */}
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsMinimized(true)}>
-          <X className="h-4 w-4" />
-        </Button>
+        <p className="text-center text-xs text-muted-foreground">
+          {isListening ? '🎤 Listening... Speak now!' : 'Tap mic to start'}
+        </p>
       </div>
-
-      {/* Response area - expandable */}
-      {response && !isProcessing && (
-        <div className="px-6 pb-4">
-          <div className="rounded-lg bg-primary/10 p-3 max-w-2xl mx-auto">
-            <p className="text-sm text-center">{response}</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

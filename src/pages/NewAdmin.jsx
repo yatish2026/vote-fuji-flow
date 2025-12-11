@@ -758,6 +758,9 @@ const NewAdmin = () => {
           </div>
         </DialogContent>
       </Dialog>
+      
+      {/* Voice Assistant */}
+      <VoiceAssistant />
     </div>
   );
 };
