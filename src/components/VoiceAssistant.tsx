@@ -405,7 +405,8 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
     return (
       <Button
         onClick={() => setIsMinimized(false)}
-        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-primary shadow-lg hover:bg-primary/90"
+        style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 9999 }}
+        className="h-14 w-14 rounded-full bg-primary shadow-lg hover:bg-primary/90"
         size="icon"
       >
         <MessageCircle className="h-6 w-6" />
@@ -414,7 +415,10 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
   }
 
   return (
-    <div className={`fixed bottom-6 right-6 z-50 w-80 rounded-xl border bg-card shadow-2xl ${className}`}>
+    <div 
+      style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 9999 }}
+      className={`w-80 rounded-xl border bg-card shadow-2xl ${className}`}
+    >
       {/* Header */}
       <div className="flex items-center justify-between border-b p-3">
         <div className="flex items-center gap-2">
