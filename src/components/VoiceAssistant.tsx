@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Mic, MicOff, Volume2, VolumeX, Loader2, X, MessageCircle } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, Loader2, X, MessageCircle, Square, Languages } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
@@ -48,6 +48,15 @@ const CONTRACT_ABI = [
 
 const CONTRACT_ADDRESS = "0x1549f7Ddd4fCE6109F448A1C6dFDF0694d3a5fbd";
 
+// Supported languages
+const LANGUAGES = [
+  { code: 'te-IN', name: 'Telugu', native: 'తెలుగు' },
+  { code: 'hi-IN', name: 'Hindi', native: 'हिंदी' },
+  { code: 'en-US', name: 'English', native: 'English' },
+  { code: 'ta-IN', name: 'Tamil', native: 'தமிழ்' },
+  { code: 'kn-IN', name: 'Kannada', native: 'ಕನ್ನಡ' },
+];
+
 interface VoiceAssistantProps {
   className?: string;
 }
@@ -59,7 +68,8 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
   const [isMinimized, setIsMinimized] = useState(true);
   const [transcript, setTranscript] = useState('');
   const [response, setResponse] = useState('');
-  const [detectedLanguage, setDetectedLanguage] = useState('en-US');
+  const [selectedLanguage, setSelectedLanguage] = useState('te-IN'); // Default to Telugu
+  const [showLanguageMenu, setShowLanguageMenu] = useState(false);
   
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const synthRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -78,14 +88,16 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
     isProcessingRef.current = isProcessing;
   }, [isProcessing]);
 
-  // Initialize Speech Recognition
-  useEffect(() => {
+  // Initialize Speech Recognition with selected language
+  const initRecognition = useCallback(() => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.continuous = true;
       recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'en-US';
+      recognitionRef.current.lang = selectedLanguage;
+
+      console.log('🎤 Speech recognition initialized with language:', selectedLanguage);
 
       recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
         let finalTranscript = '';
@@ -99,6 +111,8 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
             interimTranscript += result[0].transcript;
           }
         }
+        
+        console.log('📝 Transcript:', { final: finalTranscript, interim: interimTranscript });
         
         if (finalTranscript) {
           setTranscript(finalTranscript);
@@ -116,6 +130,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
       };
 
       recognitionRef.current.onend = () => {
+        console.log('🔚 Recognition ended, isListening:', isListeningRef.current);
         if (isListeningRef.current && !isProcessingRef.current) {
           try {
             recognitionRef.current?.start();
@@ -125,7 +140,11 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
         }
       };
     }
+  }, [selectedLanguage, toast]);
 
+  // Re-initialize when language changes
+  useEffect(() => {
+    initRecognition();
     // Load voices
     window.speechSynthesis.getVoices();
 
@@ -133,41 +152,53 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
       recognitionRef.current?.stop();
       window.speechSynthesis.cancel();
     };
-  }, []);
+  }, [initRecognition]);
 
   // Speak response in detected language
-  const speak = useCallback((text: string, lang: string = 'en-US') => {
+  const speak = useCallback((text: string, lang: string = selectedLanguage) => {
     if (!text) return;
     
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang;
-    utterance.rate = 1.0;
+    utterance.rate = 0.9; // Slightly slower for clarity
     utterance.pitch = 1.0;
     
     const voices = window.speechSynthesis.getVoices();
     const langCode = lang.split('-')[0];
-    const voice = voices.find(v => v.lang.startsWith(langCode)) || voices.find(v => v.lang.startsWith('en')) || voices[0];
-    if (voice) utterance.voice = voice;
+    
+    // Try to find best voice for the language
+    let voice = voices.find(v => v.lang === lang);
+    if (!voice) voice = voices.find(v => v.lang.startsWith(langCode));
+    if (!voice) voice = voices.find(v => v.lang.startsWith('en'));
+    if (!voice && voices.length > 0) voice = voices[0];
+    
+    if (voice) {
+      utterance.voice = voice;
+      console.log('🔊 Using voice:', voice.name, voice.lang);
+    }
     
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
+    utterance.onerror = (e) => {
+      console.error('Speech error:', e);
+      setIsSpeaking(false);
+    };
     
     synthRef.current = utterance;
     window.speechSynthesis.speak(utterance);
-  }, []);
+  }, [selectedLanguage]);
 
   // Process voice command with Gemini
   const processVoiceCommand = useCallback(async (text: string) => {
     if (!text.trim() || isProcessingRef.current) return;
     
     setIsProcessing(true);
-    console.log('🎤 Processing:', text);
+    console.log('🎤 Processing:', text, 'Language:', selectedLanguage);
 
     try {
       const { data, error } = await supabase.functions.invoke('gemini-voice', {
-        body: { message: text, language: detectedLanguage }
+        body: { message: text, language: selectedLanguage }
       });
 
       if (error) throw error;
@@ -177,17 +208,15 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
       setResponse(responseText);
       
       // Detect language from response for TTS
-      let ttsLang = 'en-US';
-      if (/[\u0900-\u097F]/.test(responseText)) ttsLang = 'hi-IN';
-      else if (/[\u0B80-\u0BFF]/.test(responseText)) ttsLang = 'ta-IN';
-      else if (/[\u0C80-\u0CFF]/.test(responseText)) ttsLang = 'kn-IN';
-      else if (/[\u0C00-\u0C7F]/.test(responseText)) ttsLang = 'te-IN';
-      else if (/[\u0980-\u09FF]/.test(responseText)) ttsLang = 'bn-IN';
-      else if (/[\u0A80-\u0AFF]/.test(responseText)) ttsLang = 'gu-IN';
-      else if (/[\u0B00-\u0B7F]/.test(responseText)) ttsLang = 'or-IN';
-      else if (/[\u0A00-\u0A7F]/.test(responseText)) ttsLang = 'pa-IN';
+      let ttsLang = selectedLanguage;
+      if (/[\u0C00-\u0C7F]/.test(responseText)) ttsLang = 'te-IN'; // Telugu
+      else if (/[\u0900-\u097F]/.test(responseText)) ttsLang = 'hi-IN'; // Hindi
+      else if (/[\u0B80-\u0BFF]/.test(responseText)) ttsLang = 'ta-IN'; // Tamil
+      else if (/[\u0C80-\u0CFF]/.test(responseText)) ttsLang = 'kn-IN'; // Kannada
+      else if (/[\u0980-\u09FF]/.test(responseText)) ttsLang = 'bn-IN'; // Bengali
+      else if (/[a-zA-Z]/.test(responseText)) ttsLang = 'en-US'; // English
       
-      setDetectedLanguage(ttsLang);
+      console.log('🗣️ TTS Language:', ttsLang);
       speak(responseText, ttsLang);
 
       if (data.action) {
@@ -196,13 +225,17 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
 
     } catch (error) {
       console.error('❌ Error processing command:', error);
-      const errorMsg = 'Sorry, I had trouble processing that. Please try again.';
+      const errorMsg = selectedLanguage.startsWith('te') 
+        ? 'క్షమించండి, ప్రాసెస్ చేయడంలో సమస్య. మళ్ళీ ప్రయత్నించండి.'
+        : selectedLanguage.startsWith('hi')
+        ? 'क्षमा करें, प्रोसेस करने में समस्या हुई। कृपया पुनः प्रयास करें।'
+        : 'Sorry, I had trouble processing that. Please try again.';
       setResponse(errorMsg);
-      speak(errorMsg);
+      speak(errorMsg, selectedLanguage);
     } finally {
       setIsProcessing(false);
     }
-  }, [detectedLanguage, speak]);
+  }, [selectedLanguage, speak]);
 
   // Execute parsed action
   const executeAction = useCallback(async (action: any) => {
@@ -284,7 +317,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
         ? `Found ${elections.length} elections: ${elections.join(', ')}`
         : 'No elections found.';
       
-      speak(message, detectedLanguage);
+      speak(message, selectedLanguage);
       setResponse(message);
     } catch (error) {
       console.error('Error listing elections:', error);
@@ -292,7 +325,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
       speak(msg);
       setResponse(msg);
     }
-  }, [getContract, speak, detectedLanguage]);
+  }, [getContract, speak, selectedLanguage]);
 
   const getElectionDetails = useCallback(async (electionId: number) => {
     try {
@@ -319,7 +352,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
       }
       
       const message = `Election: ${title}. Candidates: ${candidateList}`;
-      speak(message, detectedLanguage);
+      speak(message, selectedLanguage);
       setResponse(message);
     } catch (error) {
       console.error('Error getting election:', error);
@@ -327,7 +360,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
       speak(msg);
       setResponse(msg);
     }
-  }, [getContract, speak, detectedLanguage]);
+  }, [getContract, speak, selectedLanguage]);
 
   const castVote = useCallback(async (electionId: number, candidateId: number) => {
     try {
@@ -338,7 +371,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
       await tx.wait();
       
       const message = 'Your vote has been cast successfully!';
-      speak(message, detectedLanguage);
+      speak(message, selectedLanguage);
       setResponse(message);
       toast({ title: 'Vote Cast!', description: 'Transaction confirmed.' });
     } catch (error: any) {
@@ -348,7 +381,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
       setResponse(errMsg);
       toast({ title: 'Vote Failed', description: errMsg });
     }
-  }, [getContract, speak, detectedLanguage, toast]);
+  }, [getContract, speak, selectedLanguage, toast]);
 
   const createElection = useCallback(async (title: string, candidates: string[]) => {
     try {
@@ -359,7 +392,7 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
       await tx.wait();
       
       const message = `Election "${title}" created successfully!`;
-      speak(message, detectedLanguage);
+      speak(message, selectedLanguage);
       setResponse(message);
       toast({ title: 'Election Created!', description: message });
     } catch (error: any) {
@@ -369,25 +402,31 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
       setResponse(errMsg);
       toast({ title: 'Creation Failed', description: error.reason || 'Unknown error' });
     }
-  }, [getContract, speak, detectedLanguage, toast]);
+  }, [getContract, speak, selectedLanguage, toast]);
 
-  // Toggle listening
-  const toggleListening = useCallback(() => {
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-    } else {
-      setTranscript('');
-      setResponse('');
-      try {
-        recognitionRef.current?.start();
-        setIsListening(true);
-        speak('I\'m listening. How can I help you?', 'en-US');
-      } catch (e) {
-        console.error('Failed to start recognition:', e);
-      }
+  // Start listening
+  const startListening = useCallback(() => {
+    setTranscript('');
+    setResponse('');
+    try {
+      recognitionRef.current?.start();
+      setIsListening(true);
+      const greeting = selectedLanguage.startsWith('te') 
+        ? 'నేను వింటున్నాను. మీకు ఎలా సహాయం చేయగలను?'
+        : selectedLanguage.startsWith('hi')
+        ? 'मैं सुन रहा हूं। मैं आपकी कैसे मदद कर सकता हूं?'
+        : 'I\'m listening. How can I help you?';
+      speak(greeting, selectedLanguage);
+    } catch (e) {
+      console.error('Failed to start recognition:', e);
     }
-  }, [isListening, speak]);
+  }, [selectedLanguage, speak]);
+
+  // Stop listening
+  const stopListening = useCallback(() => {
+    recognitionRef.current?.stop();
+    setIsListening(false);
+  }, []);
 
   // Stop speaking
   const stopSpeaking = useCallback(() => {
@@ -395,7 +434,23 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
     setIsSpeaking(false);
   }, []);
 
+  // Change language
+  const changeLanguage = useCallback((langCode: string) => {
+    setSelectedLanguage(langCode);
+    setShowLanguageMenu(false);
+    
+    // Stop current listening and reinitialize
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+    }
+    
+    const lang = LANGUAGES.find(l => l.code === langCode);
+    toast({ title: `Language changed to ${lang?.native || langCode}` });
+  }, [isListening, toast]);
+
   const isSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+  const currentLang = LANGUAGES.find(l => l.code === selectedLanguage);
 
   if (!isSupported) {
     return null;
@@ -425,13 +480,42 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
           <div className={`h-3 w-3 rounded-full ${isListening ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/50'}`} />
           <span className="font-semibold text-base">Voice Assistant</span>
         </div>
-        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setIsMinimized(true)}>
-          <X className="h-5 w-5" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Language Selector */}
+          <div className="relative">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-8 px-2 text-xs"
+              onClick={() => setShowLanguageMenu(!showLanguageMenu)}
+            >
+              <Languages className="h-4 w-4 mr-1" />
+              {currentLang?.native}
+            </Button>
+            {showLanguageMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-card border rounded-lg shadow-lg py-1 min-w-[120px] z-50">
+                {LANGUAGES.map(lang => (
+                  <button
+                    key={lang.code}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-muted ${
+                      selectedLanguage === lang.code ? 'bg-primary/10 font-medium' : ''
+                    }`}
+                    onClick={() => changeLanguage(lang.code)}
+                  >
+                    {lang.native}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsMinimized(true)}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Content */}
-      <div className="p-5 space-y-5">
+      <div className="p-5 space-y-4">
         {transcript && (
           <div className="rounded-lg bg-muted/50 p-4">
             <p className="text-sm text-muted-foreground mb-1">You said:</p>
@@ -455,33 +539,54 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
 
         {/* Controls */}
         <div className="flex items-center justify-center gap-4">
+          {/* Start Button */}
           <Button
-            onClick={toggleListening}
+            onClick={startListening}
             size="lg"
-            className={`h-18 w-18 rounded-full ${
-              isListening 
-                ? 'bg-destructive hover:bg-destructive/90' 
-                : 'bg-primary hover:bg-primary/90'
-            }`}
-            style={{ height: '72px', width: '72px' }}
+            className="rounded-full bg-green-600 hover:bg-green-700"
+            style={{ height: '64px', width: '64px' }}
+            disabled={isListening}
           >
-            {isListening ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
+            <Mic className="h-7 w-7" />
           </Button>
 
+          {/* Stop Button */}
+          <Button
+            onClick={stopListening}
+            size="lg"
+            className="rounded-full bg-destructive hover:bg-destructive/90"
+            style={{ height: '64px', width: '64px' }}
+            disabled={!isListening}
+          >
+            <Square className="h-6 w-6" />
+          </Button>
+
+          {/* Mute Speaker Button */}
           <Button
             onClick={stopSpeaking}
             size="lg"
             variant="outline"
             className="rounded-full"
-            style={{ height: '72px', width: '72px' }}
+            style={{ height: '64px', width: '64px' }}
             disabled={!isSpeaking}
           >
-            {isSpeaking ? <VolumeX className="h-8 w-8" /> : <Volume2 className="h-8 w-8" />}
+            {isSpeaking ? <VolumeX className="h-7 w-7" /> : <Volume2 className="h-7 w-7" />}
           </Button>
         </div>
 
         <p className="text-center text-sm text-muted-foreground">
-          {isListening ? '🎤 Listening... Speak now!' : 'Tap mic to start'}
+          {isListening 
+            ? selectedLanguage.startsWith('te') 
+              ? '🎤 వింటున్నాను... ఇప్పుడు మాట్లాడండి!'
+              : selectedLanguage.startsWith('hi')
+              ? '🎤 सुन रहा हूं... अब बोलिए!'
+              : '🎤 Listening... Speak now!'
+            : selectedLanguage.startsWith('te')
+              ? 'మైక్ నొక్కి ప్రారంభించండి'
+              : selectedLanguage.startsWith('hi')
+              ? 'माइक दबाकर शुरू करें'
+              : 'Tap mic to start'
+          }
         </p>
       </div>
     </div>
