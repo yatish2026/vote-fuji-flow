@@ -405,80 +405,82 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ className }) => 
     return (
       <Button
         onClick={() => setIsMinimized(false)}
-        style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 9999 }}
-        className="h-14 w-14 rounded-full bg-primary shadow-lg hover:bg-primary/90"
+        style={{ position: 'fixed', bottom: '32px', right: '32px', zIndex: 9999 }}
+        className="h-20 w-20 rounded-full bg-primary shadow-lg hover:bg-primary/90"
         size="icon"
       >
-        <MessageCircle className="h-6 w-6" />
+        <MessageCircle className="h-10 w-10" />
       </Button>
     );
   }
 
   return (
     <div 
-      style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 9999 }}
-      className={`w-80 rounded-xl border bg-card shadow-2xl ${className}`}
+      style={{ position: 'fixed', bottom: '32px', right: '32px', zIndex: 9999 }}
+      className={`w-96 rounded-xl border bg-card shadow-2xl ${className}`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b p-3">
-        <div className="flex items-center gap-2">
-          <div className={`h-2 w-2 rounded-full ${isListening ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/50'}`} />
-          <span className="font-medium text-sm">Voice Assistant</span>
+      <div className="flex items-center justify-between border-b p-4">
+        <div className="flex items-center gap-3">
+          <div className={`h-3 w-3 rounded-full ${isListening ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/50'}`} />
+          <span className="font-semibold text-base">Voice Assistant</span>
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsMinimized(true)}>
-          <X className="h-4 w-4" />
+        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setIsMinimized(true)}>
+          <X className="h-5 w-5" />
         </Button>
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-4">
+      <div className="p-5 space-y-5">
         {transcript && (
-          <div className="rounded-lg bg-muted/50 p-3">
-            <p className="text-xs text-muted-foreground mb-1">You said:</p>
-            <p className="text-sm">{transcript}</p>
+          <div className="rounded-lg bg-muted/50 p-4">
+            <p className="text-sm text-muted-foreground mb-1">You said:</p>
+            <p className="text-base">{transcript}</p>
           </div>
         )}
 
         {isProcessing && (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">Processing...</span>
+          <div className="flex items-center gap-3 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="text-base">Processing...</span>
           </div>
         )}
 
         {response && !isProcessing && (
-          <div className="rounded-lg bg-primary/10 p-3">
-            <p className="text-xs text-muted-foreground mb-1">Assistant:</p>
-            <p className="text-sm">{response}</p>
+          <div className="rounded-lg bg-primary/10 p-4">
+            <p className="text-sm text-muted-foreground mb-1">Assistant:</p>
+            <p className="text-base">{response}</p>
           </div>
         )}
 
         {/* Controls */}
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-4">
           <Button
             onClick={toggleListening}
             size="lg"
-            className={`h-14 w-14 rounded-full ${
+            className={`h-18 w-18 rounded-full ${
               isListening 
                 ? 'bg-destructive hover:bg-destructive/90' 
                 : 'bg-primary hover:bg-primary/90'
             }`}
+            style={{ height: '72px', width: '72px' }}
           >
-            {isListening ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
+            {isListening ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
           </Button>
 
           <Button
             onClick={stopSpeaking}
             size="lg"
             variant="outline"
-            className="h-14 w-14 rounded-full"
+            className="rounded-full"
+            style={{ height: '72px', width: '72px' }}
             disabled={!isSpeaking}
           >
-            {isSpeaking ? <VolumeX className="h-6 w-6" /> : <Volume2 className="h-6 w-6" />}
+            {isSpeaking ? <VolumeX className="h-8 w-8" /> : <Volume2 className="h-8 w-8" />}
           </Button>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground">
+        <p className="text-center text-sm text-muted-foreground">
           {isListening ? '🎤 Listening... Speak now!' : 'Tap mic to start'}
         </p>
       </div>
