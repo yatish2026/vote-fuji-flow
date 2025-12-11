@@ -12,10 +12,10 @@ serve(async (req) => {
   }
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      console.error('❌ LOVABLE_API_KEY is not configured');
-      throw new Error('LOVABLE_API_KEY is not configured');
+    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+    if (!GEMINI_API_KEY) {
+      console.error('❌ GEMINI_API_KEY is not configured');
+      throw new Error('GEMINI_API_KEY is not configured');
     }
 
     const { message, context, language } = await req.json();
@@ -23,67 +23,63 @@ serve(async (req) => {
 
     const systemPrompt = `You are a helpful multilingual voice assistant for a blockchain voting platform built on Avalanche. You help users navigate the app and cast votes.
 
-CRITICAL INSTRUCTIONS:
-1. Respond in the SAME LANGUAGE the user speaks. If they speak Hindi, respond in Hindi. If they speak Tamil, respond in Tamil, etc.
+CRITICAL LANGUAGE INSTRUCTIONS:
+1. ALWAYS detect and respond in the SAME LANGUAGE the user speaks:
+   - If user speaks in Telugu (తెలుగు), respond ONLY in Telugu
+   - If user speaks in Hindi (हिंदी), respond ONLY in Hindi  
+   - If user speaks in English, respond in English
+   - If user speaks in Tamil (தமிழ்), respond in Tamil
+   - If user speaks in Kannada (ಕನ್ನಡ), respond in Kannada
+   - If user speaks in Bengali (বাংলা), respond in Bengali
+   - If user speaks in Marathi (मराठी), respond in Marathi
 2. Keep responses SHORT and conversational (1-2 sentences max) since this is voice interaction.
 3. Be helpful and guide users through voting processes.
+4. Use natural, friendly tone in the detected language.
 
 AVAILABLE COMMANDS - Parse user intent and return JSON action:
-- Navigate: {"action": "navigate", "page": "home|vote|admin|results"}
+- Navigate: {"action": "navigate", "page": "home|vote|admin|results|auth"}
 - List Elections: {"action": "list_elections"}
 - Get Election Details: {"action": "get_election", "electionId": <number>}
 - Cast Vote: {"action": "cast_vote", "electionId": <number>, "candidateId": <number>}
 - Create Election: {"action": "create_election", "title": "<title>", "candidates": ["name1", "name2"]}
 
-RESPONSE FORMAT:
-If user wants an action, respond with:
+RESPONSE FORMAT - ALWAYS return valid JSON:
 {"response": "<your spoken response in user's language>", "action": <action object or null>}
-
-If just chatting, respond with:
-{"response": "<your spoken response in user's language>", "action": null}
 
 Current language hint: ${language || 'auto-detect'}`;
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: message }
-        ],
-        temperature: 0.7,
-        max_tokens: 500,
-      }),
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: systemPrompt + '\n\nUser message: ' + message }]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 500,
+          }
+        }),
+      }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ AI Gateway error:', response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: 'Rate limit exceeded', response: 'Too many requests. Please try again in a moment.' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: 'Payment required', response: 'AI credits exhausted. Please add credits.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      throw new Error(`AI Gateway error: ${response.status}`);
+      console.error('❌ Gemini API error:', response.status, errorText);
+      throw new Error(`Gemini API error: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log('✅ AI response received');
+    console.log('✅ Gemini response received');
     
-    const textResponse = data.choices?.[0]?.message?.content || '';
+    const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     console.log('📤 Raw response:', textResponse);
 
     // Try to parse as JSON, fallback to plain text
